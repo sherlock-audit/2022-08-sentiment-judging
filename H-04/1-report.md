@@ -1,32 +1,26 @@
 Lambda
-# ERC4626Oracle: Assumes that asset and share have same number of decimals
+# AccountManager: Liquidations not possible when transfer fails
 
 ## Summary
-If the asset and share of a EIP-4626 vault has a different number of decimals than the vault itself, the value that is returned by `getPrice()` will be wrong.
+When the transfer of one asset fails, liquidations become impossible.
 
 ## Vulnerability Detail
-In `getPrice()`, the number of decimals of the EIP-4626 share is used to query how much assets will be returned for 1 share (which is fine). But this value is also used to normalize the result that is returned by `previewRedeem`. While this works fine when the number of decimals between the asset and share are identical, the value will be wrong when they differ. `previewRedeem` will then return a value with the decimals of asset (because it returns how much of asset one will get).
-
-It is also mentioned in the standard that there is no need to use the vault's decimals:
-> Although the convertTo functions should eliminate the need for any use of an EIP-4626 Vault’s decimals variable, it is still strongly recommended to mirror the underlying token’s decimals if at all possible, to eliminate possible sources of confusion and simplify integration across front-ends and for other off-chain users.
+`_liquidate` calls `sweepTo`, which iterates over all assets. When one of those transfers fails, the whole liquidation process therefore fails. There are multiple reasons why a transfer could fail:
+1.) Blocked addresses (e.g., USDC)
+2.) The balance of the asset is 0, but it is still listed under asset. This can be for instance triggered by performing a 0 value Uniswap swap, in which case it is still added to `tokensIn`. Some tokens revert for zero value transfers (see https://github.com/d-xo/weird-erc20)
+3.) Paused tokens
+4.) Upgradeable tokens that changed the implementation.
 
 ## Impact
-In the scenarios mentioned above, the price that is used for the ERC4626 tokens will be either way too high or low (depending on how the decimals differ), meaning that the health factor calculation no longer work correctly.
+See above, an account cannot be liquidated. In certain conditions, this might even be triggerable by the user. For instance, a user could try to get on the USDC blacklist to avoid liquidations.
 
 ## Code Snippet
-https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/oracle/src/erc4626/ERC4626Oracle.sol#L41
+https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/protocol/src/core/AccountManager.sol#L384
+https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/protocol/src/core/Account.sol#L166
 
 ## Tool used
 
 Manual Review
 
 ## Recommendation
-```
-        uint decimals = IERC4626(token).decimals();
-        return IERC4626(token).previewRedeem(
-            10 ** decimals
-        ).mulDivDown(
-            oracleFacade.getPrice(IERC4626(token).asset()),
-            10 ** IERC4626(token).asset().decimals()
-        );
-```
+Catch reversions for the transfer and skip this asset (but it could be kept in the assets list to allow retries later on).

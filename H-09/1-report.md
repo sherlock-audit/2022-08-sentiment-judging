@@ -1,23 +1,29 @@
 Lambda
-# LEther: Flash loan can be used to manipulate borrow rate
+# Stable2CurveOracle: Missing normalization
 
 ## Summary
-`LEther` mistakenly does not call `beforeDeposit` before a deposit happens, which can be exploited to reduce interest significantly.
+The price that is returned by `getPrice()` of `Stable2CurveOracle` is not normalized to 10^18, leading to wrong values for those tokens.
 
 ## Vulnerability Detail
-In `depositEth` within `LEther`, `beforeDeposit` which updates the state is not called. Because of that, the utilization can be manipulated within a single transaction. As this is unintended behavior, there are potentially more ways to exploit it (combination of borrowing, depositing, withdrawing, etc...), but one way how it can be exploited to reduce interest significantly is documented below.
+`oracleFacade.getPrice(ICurvePool(token).coins(0))` returns a price with 18 decimals. However, `ICurvePool(token).get_virtual_price()` also returns a price that is normalized to 18 decimals. This is for instance visible in the source code of the stETH / ETH pool: `@return LP token virtual price normalized to 1e18` (https://etherscan.io/address/0xDC24316b9AE028F1497c275EB9192a3Ea0f67022#code)
 
 ## Impact
-Someone who has borrowed money (and therefore wants to reduce interest) takes out a huge ETH flash loan and deposits the ETH via `depositEth()`. Then, he calls `updateState()` which now uses the significantly increased (W)ETH balance. Therefore, utilization will be almost 0 and almost no interest will be accrued. Afterwards, he calls `redeemEth()` and pays back the flashloan.
+The returned prices for the LP tokens will have 36 decimals. For instance, the stETH / ETH `get_virtual_price()` at the time of writing is 1049449001674373194. Assuming stETH is 0.95 ETH (9.5 * 1e17), the returned value will be:
+1049449001674373194 * 9.5 * 1e17 ~= 1e36
 
-Note that this attack is most effective when `updateState()` was not called for a long time. However, it can also be performed multiple times (e.g., front-running all transactions that would update the state) such that interest is never properly accrued.
+This is wrong and will cause those LP tokens to be significantly overvalued, which can be exploited to take out debt positions where the health ratio (if properly calculated) would be way below 1.
 
 ## Code Snippet
-https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/protocol/src/tokens/LEther.sol#L36
+https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/oracle/src/curve/Stable2CurveOracle.sol#L47
 
 ## Tool used
 
 Manual Review
 
 ## Recommendation
-Call `beforeDeposit()` in `depositEth()` (and `beforeWithdraw()` in `redeemEth()`).
+```
+return ((price0 < price1) ? price0 : price1).mulWadDown(
+            ICurvePool(token).get_virtual_price()
+           ).divWadDown(1e18);
+```
+This will correctly return ~1e18 in the above example, which is more or less the current price (1 ETH) of this LP token.

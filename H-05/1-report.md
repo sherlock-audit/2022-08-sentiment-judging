@@ -1,29 +1,26 @@
 Lambda
-# Stable2CurveOracle: Missing normalization
+# AccountManager: approve can be abused to drain an account by using UniswapV3Router
 
 ## Summary
-The price that is returned by `getPrice()` of `Stable2CurveOracle` is not normalized to 10^18, leading to wrong values for those tokens.
+An account can `approve` UniswapV3Router, which then can drain the account.
 
 ## Vulnerability Detail
-`oracleFacade.getPrice(ICurvePool(token).coins(0))` returns a price with 18 decimals. However, `ICurvePool(token).get_virtual_price()` also returns a price that is normalized to 18 decimals. This is for instance visible in the source code of the stETH / ETH pool: `@return LP token virtual price normalized to 1e18` (https://etherscan.io/address/0xDC24316b9AE028F1497c275EB9192a3Ea0f67022#code)
+It is only possible to `approve` addresses where a corresponding controller exists. However, one such address will be the `UniswapV3Router` (because it is intended to be used in other places) which provides the `multiCall` function. This can be abused like this:
+1.) Account A approves `UniswapV3Router` (via `AccountManager.approve`) for some ERC4626 vault. This succeeds because there is a controller for `UniswapV3Router`.
+2.) Account A mints those ERC4626 tokens and takes out a loan. Because of the ERC4626 tokens, his health ratio is 1.2
+3.) Some EOA B uses `UniswapV3Router.multicall` to call `withdraw(balanceOf(A), address(B), address(a))` for him. Because `UniswapV3Router` is approved to spend those tokens, this succeeds. After this call, the account of A is now drained and has a health ratio of 0. All assets belong to the EOA B (which will in practice be owned by the same person as the account A).
 
 ## Impact
-The returned prices for the LP tokens will have 36 decimals. For instance, the stETH / ETH `get_virtual_price()` at the time of writing is 1049449001674373194. Assuming stETH is 0.95 ETH (9.5 * 1e17), the returned value will be:
-1049449001674373194 * 9.5 * 1e17 ~= 1e36
-
-This is wrong and will cause those LP tokens to be significantly overvalued, which can be exploited to take out debt positions where the health ratio (if properly calculated) would be way below 1.
+See vulnerability details, an account can be completely drained like this.
 
 ## Code Snippet
-https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/oracle/src/curve/Stable2CurveOracle.sol#L47
+https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/protocol/src/core/AccountManager.sol#L277
+
+https://github.com/Uniswap/v3-periphery/blob/8264326f537df1695b2074ccd5a772b48b5d7e5e/contracts/lens/UniswapInterfaceMulticall.sol#L27
 
 ## Tool used
 
 Manual Review
 
 ## Recommendation
-```
-return ((price0 < price1) ? price0 : price1).mulWadDown(
-            ICurvePool(token).get_virtual_price()
-           ).divWadDown(1e18);
-```
-This will correctly return ~1e18 in the above example, which is more or less the current price (1 ETH) of this LP token.
+Do not allow approving `UniswapV3Router`.

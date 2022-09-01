@@ -1,31 +1,27 @@
 Lambda
-# UniV2LPOracle: Decimals of pair tokens ignored
+# AccountManager: address(0) used for borrowing ETH
 
 ## Summary
-`UniV2LPOracle` does not take into account how many decimals the reserve tokens have, leading to wrong values.
+Using `address(0)` for borrowing ETH bricks an account.
 
 ## Vulnerability Detail
-`getReserves()` returns the tokens in their decimals. Therefore, we have in the calculation (see the comments for the calculations):
-```
-        return FixedPointMathLib.sqrt(
-            r0 //d1 decimals
-            .mulWadDown(r1) //d2 decimals
-            .mulWadDown(oracle.getPrice(IUniswapV2Pair(pair).token0())) //18 decimals
-            .mulWadDown(oracle.getPrice(IUniswapV2Pair(pair).token1())) //18 decimals
-        ) // (d1 + d2 + 36)/2 decimals
-        .mulDivDown(2e27, IUniswapV2Pair(pair).totalSupply()); // (d1 + d2 + 36)/2 + 27 - 18 decimals
-```
-Meaning that the returned value will not have 18 decimals.
+According to the following line in `settle`, `address(0)` is a valid value for `borrows` and used to indicate ETH:
+https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/protocol/src/core/AccountManager.sol#L322
+While using `address(0)` in `borrow` (for `LEther`) would work, it would introduce different problems:
+- `address(0)` would be added to the assets of the account, meaning that `RiskEngine._getBalance` would always revert because it would always call `IERC20(assets[i]).balanceOf(account)`
+- A user could not call repay with `address(0)`, as this function reverts with this value in contrast to `borrow`
+- Because of the above issue, `settle` would actually also not work (although it has a special case for `address(0)`), because it calls `repay` with `address(0)` in such situations.
 
 ## Impact
-The price that is used for those LP tokens will be way too high, which can be exploited to create debt positions with a health ratio below 1.
+As mentioned above, using `address(0)` in `borrow` completely bricks an account. Of course, it is up to the sentiment team if this value is actually allowed (because when `LTokenFor(address(0))` is not set, the call to `borrow` fails). However, as mentioned, it looks like `address(0)` is intended to be added to. `LTokenFor`, otherwise there is no reason to handle it in `settle`.
 
 ## Code Snippet
-https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/oracle/src/uniswap/UniV2LPOracle.sol#L49
+https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/protocol/src/core/RiskEngine.sol#L157
+https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/protocol/src/core/AccountManager.sol#L236
 
 ## Tool used
 
 Manual Review
 
 ## Recommendation
-Normalize (taking into account the decimals of the reserves) to have a result with 18 decimals.
+Disallow using `address(0)` in `borrow`, i.e. `require` that `token != address(0)`.
