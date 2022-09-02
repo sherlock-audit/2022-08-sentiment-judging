@@ -1,35 +1,25 @@
 Avci
-#  Contract Locking Received Ethers 
+# Decimals overflow can happen in getprice function
 
 ## Summary
-Contract locking ether that comes into 
+tokens with decimals higher than 18 will always revert.
 
 ## Vulnerability Detail
-Receive function is a payable and anyone can deposit ether to contract but function do not doing any operation with deposited ether. 
+L55 will revert when token has higher than 18 decimals.
+
 
 
 ## Impact
-Ether locks for ever in the contract Account.sol
+This will cause inabilities for the Getprice function 
+
 
 ## Code Snippet
-https://github.com/sentimentxyz/protocol/blob/4e45871e4540df0f189f6c89deb8d34f24930120/src/core/Account.sol#L196
-https://github.com/sentimentxyz/protocol/blob/4e45871e4540df0f189f6c89deb8d34f24930120/src/tokens/LEther.sol#L55
-
-
+https://github.com/sentimentxyz/oracle/blob/59b26a3d8c295208437aad36c470386c9729a4bc/src/uniswap/UniV3TWAPOracle.sol#L55
 ## Tool used
 
 Manual Review
 
 ## Recommendation
-If the function has nothing to do with money, it should revert it or remove payable.
+Consider modifying how GetPrice func to could handle tokens with higher than 18 decimals.
 
-```receive() public payable { revert (); }```
-When the user tries to send eth to contract, receive() do revert eth to the user.
-
-```receive() public {}```
-When receive function doesn't have a payable attribute, the user can't send eth to contract.
-
-
-## Reference:
-https://github.com/crytic/slither/wiki/Detector-Documentation#contracts-that-lock-ether
 

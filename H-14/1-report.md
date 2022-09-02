@@ -1,62 +1,27 @@
-0xNineDec
-# Oracle data feed may return stale prices for tokens and ether
+vali_dyor
+# If too much accounts are listed in the Registry, calling view functions could fail by exceeding arbitrary gas limits.
 
 ## Summary
-
-Currently there is a heavy dependency on the retrieved oracle prices for both ether and tokens. There is no freshness check of the retrieved data thus stale prices could be used anyways.
+RPC calls could fail if the number of accounts gets too large, which could disrupt the monitoring of health factors and ultimately the liquidation process.
 
 ## Vulnerability Detail
-
-The data feeds that the `ChainlinkOracle` implementation provides are heavily used and consulted by the protocol. The freshness and reliability of data feeds and prices across a yield protocol is crucial. The protocol does not check the last update time of the oracle retrieved prices and will use them across the protocol.
+In the contract Registry, two view functions are used to get the list of all accounts: getAllAccounts() and accountsOwnedBy(address user). Other view functions are used for the keys and the listedLTokens, but only the list of accounts could legitimately reach a significant size.
+Even if view functions are gas free, limits can be set by public rpc providers to avoid DoS attacks. For example, calling getAllAccounts() for 25000 accounts consumes 70,576,600 gas (test made using Foundry) which is more than twice the current block limit of Ethereum (30M).
 
 ## Impact
 
-The implementations that consult to Chainlink's oracle, only perform checks for non-negative values but no checks are performed in relationship to the freshness of the retrieved data. If the oracle fails or the data is stale, the protocol will use it anyways impacting directly to lenders, borrowers and other concerned parties.
+The impact would be that, once the number of accounts in the contract Registry reaches a given amount, monitoring tools using these two functions may stop to work correctly, impacting a correct visibility over the protocol. For example, a maintainer could have more difficulties to detect and execute liquidation opportunities.
 
 ## Code Snippet
 
-Currently the oracles implementation are the following:
+https://github.com/sherlock-audit/2022-08-sentiment-validydy/blob/2123357e2a9866bd62d8fe731b222f917a062d59/protocol/src/core/Registry.sol#L159
 
-```solidity
-ChainlinkOracle.getPrice()
-
-function getPrice(address token) external view virtual returns (uint) {
-    (, int answer,,,) =
-        feed[token].latestRoundData();
-
-    if (answer < 0)
-        revert Errors.NegativePrice(token, address(feed[token]));
-
-    return (
-        (uint(answer)*1e18)/getEthPrice()
-    );
-}
-
-ChainlinkOracle.getEthPrice()
-
-function getEthPrice() internal view returns (uint) {
-    (, int answer,,,) =
-        ethUsdPriceFeed.latestRoundData();
-
-    if (answer < 0)
-        revert Errors.NegativePrice(address(0), address(ethUsdPriceFeed));
-
-    return uint(answer);
-}
-
-```
+https://github.com/sherlock-audit/2022-08-sentiment-validydy/blob/2123357e2a9866bd62d8fe731b222f917a062d59/protocol/src/core/Registry.sol#L176
 
 ## Tool used
 
-Manual Review
+Manual Review and Foundry to test the gas used by these functions, after pre-populating the array accounts with 25000 addresses.
 
 ## Recommendation
 
-As Chainlink [recommends](https://docs.chain.link/docs/using-chainlink-reference-contracts/#check-the-timestamp-of-the-latest-answer):
-
-> Your application should track the `latestTimestamp` variable or use the `updatedAt` value from the `latestRoundData()` function to make sure that the latest answer is recent enough for your application to use it. If your application detects that the reported answer is not updated within the heartbeat or within time limits that you determine are acceptable for your application, pause operation or switch to an alternate operation mode while identifying the cause of the delay.
-
-> During periods of low volatility, the heartbeat triggers updates to the latest answer. Some heartbeats are configured to last several hours, so your application should check the timestamp and verify that the latest answer is recent enough for your application.
-
-It is recommended both to add also a tolerance that compares the `updatedAt` return timestamp from `latestRoundData()` with the current block timestamp and ensure that the `priceFeed` is being updated with the required frequency.
-
+As is not a good idea to restrict the max number of accounts, consider using paginated views instead of simply returning the whole list of accounts.
