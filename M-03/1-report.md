@@ -1,19 +1,81 @@
-oyc_109
-# No Transfer Ownership Pattern
+ladboy233
+# Oracle Consideration: Curve price oracle can return invalid price data.
 
 ## Summary
 
-https://github.com/sherlock-audit/2022-08-sentiment-andyfeili/blob/96338b720493bc6dcbfa8ed24b75af53adc7900d/oracle/src/utils/Ownable.sol#L21-L25
+the curve oracle in 
+
+``` 
+ Stable2CurveOracle.sol
+```
+
+the oracle data can be rounded to 0 or return invalid data.
 
 ## Vulnerability Detail
 
-In `Ownable.sol` the `transferOwnership()` function does not use a two step transfer of ownership pattern.
+In Stable2CurveOracle.sol
 
-The current owership transfer process involves the current owner calling `transferOwnership()`.
-This function checks the new address is not the zero address and proceeds to write the new address into the `admin` state variable.
+the getPrice is implemented as shown below.
 
-If the nominated EOA account is not a valid account, it is entirely possible the owner may accidentally transfer ownership to an uncontrolled account, breaking all functions which require the `adminOnly()` modifier. 
+```
+    /// @inheritdoc IOracle
+    function getPrice(address token) external view returns (uint) {
+        uint price0 = oracleFacade.getPrice(ICurvePool(token).coins(0));
+        uint price1 = oracleFacade.getPrice(ICurvePool(token).coins(1));
+        return ((price0 < price1) ? price0 : price1).mulWadDown(
+            ICurvePool(token).get_virtual_price()
+        );
+    }
+```
+
+we get price0 and price1 and use whatever the small number is and divde by virtual price.
+
+When price0 and price1 has a huge price difference (when the curve pool in very imbalanced), the above approach can report undervalued oracle data.
+
+Or if both price0 and price1 is smaller than the virtual price,
+
+because of the division logic
+
+```
+ ((price0 < price1) ? price0 : price1).mulWadDown(ICurvePool(token).get_virtual_price())
+```
+
+the oracle data would be rounded to 0.
+
+## Impact
+
+If the oracle data is invalid because of imbalanced token pool or very small price0 / price1, then the function _valueIn can get the invalid or lagging oracle and determine the wrong number of debt or callateral worth. User may not able to deposit or repay to manage their position or malicious liquidators can liquidated user's account balance.
+
+```
+    function _valueInWei(address token, uint amt)
+        internal
+        view
+        returns (uint)
+    {
+        return oracle.getPrice(token)
+        .mulDivDown(
+            amt,
+            10 ** ((token == address(0)) ? 18 : IERC20(token).decimals())
+        );
+    }
+```
+
+## Code Snippet
+
+## Tool used
+
+Manual Review
+
+Yes
 
 ## Recommendation
 
-Implement a two step process where the owner nominates an account and the nominated account needs to call an acceptOwnership() function for the transfer to fully succeed. This ensures the nominated EOA account is a valid and active account.
+To avoid price manipulation, using the virtual price would be sufficient,
+
+https://news.curve.fi/chainlink-oracles-and-curve-pools/
+
+```
+    function getPrice(address token) external view returns (uint) {
+        return  ICurvePool(token).get_virtual_price();
+    }
+```

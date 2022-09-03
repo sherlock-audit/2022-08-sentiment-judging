@@ -1,27 +1,24 @@
 Lambda
-# AccountManager: address(0) used for borrowing ETH
+# Oracle Flashloans attacks to force liquidations possible
 
 ## Summary
-Using `address(0)` for borrowing ETH bricks an account.
 
 ## Vulnerability Detail
-According to the following line in `settle`, `address(0)` is a valid value for `borrows` and used to indicate ETH:
-https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/protocol/src/core/AccountManager.sol#L322
-While using `address(0)` in `borrow` (for `LEther`) would work, it would introduce different problems:
-- `address(0)` would be added to the assets of the account, meaning that `RiskEngine._getBalance` would always revert because it would always call `IERC20(assets[i]).balanceOf(account)`
-- A user could not call repay with `address(0)`, as this function reverts with this value in contrast to `borrow`
-- Because of the above issue, `settle` would actually also not work (although it has a special case for `address(0)`), because it calls `repay` with `address(0)` in such situations.
+Some of the used oracles can be manipulated with flashloans:
+
+- The curve tricrypto pool only has a market cap of $399.3k at the time of writing. Therefore, the WETH price that is directly retrieved from the pool (`pool.price_oracle(1)`) could easily be manipulated with a flashloan.
+- yearns `pricePerShare()` is manipulable by flashloans, which was exploited previously: https://medium.com/cream-finance/post-mortem-exploit-oct-27-507b12bb6f8e
+- Compounds `exchangeRateStored()` directly queries balances and is manipulable (see e.g. the cETH code: https://etherscan.io/token/0x4ddc2d193948926d02f9b1fe9e1daa0718270ed5#code)
 
 ## Impact
-As mentioned above, using `address(0)` in `borrow` completely bricks an account. Of course, it is up to the sentiment team if this value is actually allowed (because when `LTokenFor(address(0))` is not set, the call to `borrow` fails). However, as mentioned, it looks like `address(0)` is intended to be added to. `LTokenFor`, otherwise there is no reason to handle it in `settle`.
+An attacker can use flashloans to force liquidations of users that hold these assets. They will be liquidated, although their health ratio (if properly calculated) would be significantly higher.
 
 ## Code Snippet
-https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/protocol/src/core/RiskEngine.sol#L157
-https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/protocol/src/core/AccountManager.sol#L236
+https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/oracle/src/curve/CurveTriCryptoOracle.sol#L52
 
 ## Tool used
 
 Manual Review
 
 ## Recommendation
-Disallow using `address(0)` in `borrow`, i.e. `require` that `token != address(0)`.
+Use flashloan-resistant oracles.

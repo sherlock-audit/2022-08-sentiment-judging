@@ -1,32 +1,33 @@
 Lambda
-# CTokenOracle: Wrong price for CEther
+# CTokenOracle: Missing normalization by 10^18
 
 ## Summary
-The value that is returned by `CTokenOracle` for cETH leads to wrong exchange calculations.
+The prices that are returned by `getCErc20Price` need to be normalized.
 
 ## Vulnerability Detail
-The exchange rate that is returned by `exchangeRateStored()` should not be multiplied by 1e18, this leads to wrong values.
+In `getCErc20Price`, there is a multiplication of the CErc20/Erc20 price by the Erc20/ETH price in the end. However, because the Erc20/ETH price is returned with 18 decimals, a division by 1e18 is needed in the end.
 
 ## Impact
-
-For instance, at the time of writing, 1 cETH = 0.020067 ETH and `exchangeRateStored` returns 200674139044261374629937592. cETH has 8 decimals (see https://etherscan.io/token/0x4ddc2d193948926d02f9b1fe9e1daa0718270ed5#readContract), but the system would return the following for `_valueInWei(address(cETH), 1e8)`:
+The prices are currently wrong.
+Let's take cUSDC (https://etherscan.io/token/0x39aa39c021dfbae8fac545936693ac917d5e7563#readContract) with a current price of ~0.000014 ETH. Currently, `exchangeRateStored()` is 226405222044735 and `getCErc20Price` would return:
 ```
-((200674139044261374629937592 * 1e8) * 1e8) / 10 ** IERC20(cETH).decimals() =
-((200674139044261374629937592 * 1e8) * 1e8) / 10 ** 8 =
-~2e34
+((226405222044735 * 1e8) / 1e6) * oracle.getPrice(address(USDC) = 
+((226405222044735 * 1e8) / 1e6) * 626633162680235 = 
+1.41e31 
 ```
-Which is completely wrong.
 
 ## Code Snippet
-https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/oracle/src/compound/CTokenOracle.sol#L63
+https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/oracle/src/compound/CTokenOracle.sol#L73
 
 ## Tool used
 
 Manual Review
 
 ## Recommendation
-Replace `getCEtherPrice()` with
 ```
-return ICToken(cETHER).exchangeRateStored().divWadDown(1e10);
+        return cToken.exchangeRateStored()
+        .mulDivDown(1e8 , IERC20(underlying).decimals())
+        .mulWadDown(oracle.getPrice(underlying))
+        .divWadDown(1e18);
 ```
-Then, the above calculation returns ~2e16, which is correct (1 cETH is currently worth roughly 2e16 wei, i.e. 0.02 ETH).
+Then, the above example returns 1.41e13, which is correct.

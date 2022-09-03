@@ -1,35 +1,28 @@
-Avci
-#  Contract Locking Received Ethers 
+vali_dyor
+# Native tokens can be locked forever in the contract LEther
 
 ## Summary
-Contract locking ether that comes into 
+Native tokens can be locked forever in the contract LEther.
 
 ## Vulnerability Detail
-Receive function is a payable and anyone can deposit ether to contract but function do not doing any operation with deposited ether. 
-
+The contract LEther allows users to deposit their native tokens and get in exchange shares. To do so, they should use the function depositEth().
+However, there is also a function receive() that accepts native tokens. Due to the purpose of the contract LEther, users could be misled and use receive() instead of depositETH(). As it is not possible to withdraw native tokens from the contract LEther, funds would be locked forever.
 
 ## Impact
-Ether locks for ever in the contract Account.sol
+
+Funds of misled users (native tokens) can be locked forever in the contract LEther.
 
 ## Code Snippet
-https://github.com/sentimentxyz/protocol/blob/4e45871e4540df0f189f6c89deb8d34f24930120/src/core/Account.sol#L196
-https://github.com/sentimentxyz/protocol/blob/4e45871e4540df0f189f6c89deb8d34f24930120/src/tokens/LEther.sol#L55
 
+https://github.com/sherlock-audit/2022-08-sentiment-validydy/blob/2123357e2a9866bd62d8fe731b222f917a062d59/protocol/src/tokens/LEther.sol#L55
 
 ## Tool used
 
 Manual Review
 
 ## Recommendation
-If the function has nothing to do with money, it should revert it or remove payable.
 
-```receive() public payable { revert (); }```
-When the user tries to send eth to contract, receive() do revert eth to the user.
-
-```receive() public {}```
-When receive function doesn't have a payable attribute, the user can't send eth to contract.
-
-
-## Reference:
-https://github.com/crytic/slither/wiki/Detector-Documentation#contracts-that-lock-ether
-
+Three ideas:
+- remove the function receive() if it is not used.
+- or add an error "DirectNativeTransfersNotAllowed".
+- or add a function withdrawNativeTokens(), that can be called only by an admin address.

@@ -1,28 +1,22 @@
-vali_dyor
-# Native tokens can be locked forever in the contract LEther
+Lambda
+# ATokenOracle: aETH not correctly handled
 
 ## Summary
-Native tokens can be locked forever in the contract LEther.
+`UNDERLYING_ASSET_ADDRESS()` of aETH is not correctly handled.
 
 ## Vulnerability Detail
-The contract LEther allows users to deposit their native tokens and get in exchange shares. To do so, they should use the function depositEth().
-However, there is also a function receive() that accepts native tokens. Due to the purpose of the contract LEther, users could be misled and use receive() instead of depositETH(). As it is not possible to withdraw native tokens from the contract LEther, funds would be locked forever.
+`UNDERLYING_ASSET_ADDRESS()` of aETH returns `0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE` (see https://docs.aave.com/developers/v/1.0/deployed-contracts/deployed-contract-instances or the actual contract: https://etherscan.io/address/0x3a3a65aab0dd2a17e3f1947ba16138cd37d08c04#readContract).
+However, Sentiment handles the price of ETH by either requesting the value for `address(0)` or WETH.
 
 ## Impact
-
-Funds of misled users (native tokens) can be locked forever in the contract LEther.
+The ETH price will not be returned for aETH, the call will instead revert (meaning that aETH cannot be used).
 
 ## Code Snippet
-
-https://github.com/sherlock-audit/2022-08-sentiment-validydy/blob/2123357e2a9866bd62d8fe731b222f917a062d59/protocol/src/tokens/LEther.sol#L55
+https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/oracle/src/aave/ATokenOracle.sol#L38
 
 ## Tool used
 
 Manual Review
 
 ## Recommendation
-
-Three ideas:
-- remove the function receive() if it is not used.
-- or add an error "DirectNativeTransfersNotAllowed".
-- or add a function withdrawNativeTokens(), that can be called only by an admin address.
+Check if `UNDERLYING_ASSET_ADDRESS()` returns `0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE`, request the price of `address(0)` in this case.

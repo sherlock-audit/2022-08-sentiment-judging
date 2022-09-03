@@ -1,25 +1,21 @@
-Avci
-# Decimals overflow can happen in getprice function
+Lambda
+# LToken: redeemReserves does not update borrows
 
 ## Summary
-tokens with decimals higher than 18 will always revert.
+Accounting error when redeeming reserves.
 
 ## Vulnerability Detail
-L55 will revert when token has higher than 18 decimals.
-
-
+In `updateState()`, `borrows` is increased by the accrued interest including reserves. However, when reserves are redeemed, `borrows` is not decreased by the corresponding amount. Therefore, `totalAssets()` will return a wrong value after redemption, because the redeemed reserve amount is still included in `getBorrows()`, but no longer subtracted (as it is no longer included in `getReserves()`).
 
 ## Impact
-This will cause inabilities for the Getprice function 
-
+After redemption, `convertToShares` and `convertToAssets` no longer work correctly, as they call `totalAssets()` internally.
 
 ## Code Snippet
-https://github.com/sentimentxyz/oracle/blob/59b26a3d8c295208437aad36c470386c9729a4bc/src/uniswap/UniV3TWAPOracle.sol#L55
+https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/protocol/src/tokens/LToken.sol#L248
+
 ## Tool used
 
 Manual Review
 
 ## Recommendation
-Consider modifying how GetPrice func to could handle tokens with higher than 18 decimals.
-
-
+Decrease `borrows` by the redeemed amount.

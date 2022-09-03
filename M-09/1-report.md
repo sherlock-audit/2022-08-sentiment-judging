@@ -1,22 +1,39 @@
-Lambda
-# AccountManager: Fee-On-Transfer tokens not supported
+icedpeachtea
+# isSequencerActive() uses startedAt instead of updatedAt
 
 ## Summary
-Fee-on-transfer tokens lead to problems in `AccountManager`.
+`isSequencerActive()` determines whether the sequencer is active by checking `startedAt` instead of `updatedAt`.
 
 ## Vulnerability Detail
-`AccountManager` assumes when liquidating / repaying debt (see code snippets) that the transferred amount equals to the received amount, which is not the case for fee-on-transfer tokens.
+The `isSequencerActive` function incorrectly uses `startedAt` to determine whether the data reported by Chainlink oracle is within grace period. Instead, it should use `updatedAt` which represents the timestamp of when the round was updated, not the timestamp of when the round started.
 
 ## Impact
-When a fee-on-transfer token is used, the debt is reduced by the whole amount, although only part of it is actually transferred to the `LToken`. This destroys the accounting of the `LToken` and is bad for the token holders.
+`isSequencerActive` will return false even though the data provided by Chainlink oracle is valid and fresh. 
 
 ## Code Snippet
-https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/protocol/src/core/AccountManager.sol#L380
-https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/protocol/src/core/AccountManager.sol#L236
 
+```solidity
+// oracle/src/chainlink/ArbiChainlinkOracle.sol:65
+function isSequencerActive() internal view returns (bool) {
+        (, int256 answer, uint256 startedAt,,) = sequencer.latestRoundData();
+        if (block.timestamp - startedAt <= GRACE_PERIOD_TIME || answer == 1)
+            return false;
+        return true;
+    }
+```
 ## Tool used
 
 Manual Review
+https://docs.chain.link/docs/price-feeds-api-reference/
 
 ## Recommendation
-The actual amount that was transferred could be checked. However, not supporting fee-on-transfer tokens is also completely fine in my opinion. Maybe that is already intended, but I did not find anything and wanted to make sure that you are aware of the issues with these tokens.
+Use `updatedAt` instead.
+
+```solidity
+function isSequencerActive() internal view returns (bool) {
+        (, int256 answer,, uint256 updatedAt,) = sequencer.latestRoundData();
+        if (block.timestamp - updatedAt <= GRACE_PERIOD_TIME || answer == 1)
+            return false;
+        return true;
+    }
+```

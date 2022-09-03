@@ -1,27 +1,23 @@
-vali_dyor
-# If too much accounts are listed in the Registry, calling view functions could fail by exceeding arbitrary gas limits.
+Lambda
+# LEther: Flash loan can be used to manipulate borrow rate
 
 ## Summary
-RPC calls could fail if the number of accounts gets too large, which could disrupt the monitoring of health factors and ultimately the liquidation process.
+`LEther` mistakenly does not call `beforeDeposit` before a deposit happens, which can be exploited to reduce interest significantly.
 
 ## Vulnerability Detail
-In the contract Registry, two view functions are used to get the list of all accounts: getAllAccounts() and accountsOwnedBy(address user). Other view functions are used for the keys and the listedLTokens, but only the list of accounts could legitimately reach a significant size.
-Even if view functions are gas free, limits can be set by public rpc providers to avoid DoS attacks. For example, calling getAllAccounts() for 25000 accounts consumes 70,576,600 gas (test made using Foundry) which is more than twice the current block limit of Ethereum (30M).
+In `depositEth` within `LEther`, `beforeDeposit` which updates the state is not called. Because of that, the utilization can be manipulated within a single transaction. As this is unintended behavior, there are potentially more ways to exploit it (combination of borrowing, depositing, withdrawing, etc...), but one way how it can be exploited to reduce interest significantly is documented below.
 
 ## Impact
+Someone who has borrowed money (and therefore wants to reduce interest) takes out a huge ETH flash loan and deposits the ETH via `depositEth()`. Then, he calls `updateState()` which now uses the significantly increased (W)ETH balance. Therefore, utilization will be almost 0 and almost no interest will be accrued. Afterwards, he calls `redeemEth()` and pays back the flashloan.
 
-The impact would be that, once the number of accounts in the contract Registry reaches a given amount, monitoring tools using these two functions may stop to work correctly, impacting a correct visibility over the protocol. For example, a maintainer could have more difficulties to detect and execute liquidation opportunities.
+Note that this attack is most effective when `updateState()` was not called for a long time. However, it can also be performed multiple times (e.g., front-running all transactions that would update the state) such that interest is never properly accrued.
 
 ## Code Snippet
-
-https://github.com/sherlock-audit/2022-08-sentiment-validydy/blob/2123357e2a9866bd62d8fe731b222f917a062d59/protocol/src/core/Registry.sol#L159
-
-https://github.com/sherlock-audit/2022-08-sentiment-validydy/blob/2123357e2a9866bd62d8fe731b222f917a062d59/protocol/src/core/Registry.sol#L176
+https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/protocol/src/tokens/LEther.sol#L36
 
 ## Tool used
 
-Manual Review and Foundry to test the gas used by these functions, after pre-populating the array accounts with 25000 addresses.
+Manual Review
 
 ## Recommendation
-
-As is not a good idea to restrict the max number of accounts, consider using paginated views instead of simply returning the whole list of accounts.
+Call `beforeDeposit()` in `depositEth()` (and `beforeWithdraw()` in `redeemEth()`).

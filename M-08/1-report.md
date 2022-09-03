@@ -1,24 +1,40 @@
-Lambda
-# ERC20 tokens with multiple entrypoints can be doublecounted
+icedpeachtea
+# Account can be initialized multiple times if _accountManager is address(0)
 
 ## Summary
-When an ERC20 token has multiple entrypoints, the balance will be counted two times.
+Account's contract `init` function can be reinit multiple times if `_accountManager` is `address(0)`.
 
 ## Vulnerability Detail
-Some ERC20 tokens have multiple entrypoints, see e.g. here, how this affected Compound: https://medium.com/chainsecurity/trueusd-compound-vulnerability-bc5b696d29e2
+The if statement determines the `accountManager` is not `address(0)`, if yes it determines the contract is already initialized. However, it does not check whether the input `_accountManager` is `address(0)`. If it is, the `init` function can be called twice and other people (such as an attacker) can modify the `_accountManager` to his/her controlled address. 
 
-In such cases, both addresses could potentially be added to the assets of an account, meaning that the balance of this token would be counted two times in `RiskEngine._getBalance`.
+https://twitter.com/Hacxyk/status/1529389391818510337
+
 ## Impact
-When both entrypoints are whitelisted, the balance of this token will be counted two times.
+A misconfiguration of setting `_accountManager` to `address(0)` would open up possibilities for attacker to reinitialize the contract. 
 
 ## Code Snippet
-https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/protocol/src/core/RiskEngine.sol#L157
+- protocol/src/core/Account.sol:59
+
+```solidity
+function init(address _accountManager) external {
+        if (accountManager != address(0)) 
+            revert Errors.ContractAlreadyInitialized();
+        accountManager = _accountManager;
+    }
+```
 
 ## Tool used
 
 Manual Review
 
 ## Recommendation
-Never whitelist two entrypoints of the same ERC20 token and fix all issues (see other issues) where the added tokens are not validated / the whitelist can be circumvented.
+Prevent `_accountManager` to be `address(0)` when calling the function.
 
-**Note**: This is more an operational issue, so I could understand if it were out-of-scope. I just wanted to make sure that you are aware of this risk.
+```solidity
+function init(address _accountManager) external {
+        require(_accountManager != address(0), "Cannot init as 0x0 address!");
+        if (accountManager != address(0)) 
+            revert Errors.ContractAlreadyInitialized();
+        accountManager = _accountManager;
+    }
+```

@@ -1,20 +1,20 @@
 Lambda
-# Stable2CurveOracle: Missing normalization
+# ERC4626Oracle: Assumes that asset and share have same number of decimals
 
 ## Summary
-The price that is returned by `getPrice()` of `Stable2CurveOracle` is not normalized to 10^18, leading to wrong values for those tokens.
+If the asset and share of a EIP-4626 vault has a different number of decimals than the vault itself, the value that is returned by `getPrice()` will be wrong.
 
 ## Vulnerability Detail
-`oracleFacade.getPrice(ICurvePool(token).coins(0))` returns a price with 18 decimals. However, `ICurvePool(token).get_virtual_price()` also returns a price that is normalized to 18 decimals. This is for instance visible in the source code of the stETH / ETH pool: `@return LP token virtual price normalized to 1e18` (https://etherscan.io/address/0xDC24316b9AE028F1497c275EB9192a3Ea0f67022#code)
+In `getPrice()`, the number of decimals of the EIP-4626 share is used to query how much assets will be returned for 1 share (which is fine). But this value is also used to normalize the result that is returned by `previewRedeem`. While this works fine when the number of decimals between the asset and share are identical, the value will be wrong when they differ. `previewRedeem` will then return a value with the decimals of asset (because it returns how much of asset one will get).
+
+It is also mentioned in the standard that there is no need to use the vault's decimals:
+> Although the convertTo functions should eliminate the need for any use of an EIP-4626 Vault’s decimals variable, it is still strongly recommended to mirror the underlying token’s decimals if at all possible, to eliminate possible sources of confusion and simplify integration across front-ends and for other off-chain users.
 
 ## Impact
-The returned prices for the LP tokens will have 36 decimals. For instance, the stETH / ETH `get_virtual_price()` at the time of writing is 1049449001674373194. Assuming stETH is 0.95 ETH (9.5 * 1e17), the returned value will be:
-1049449001674373194 * 9.5 * 1e17 ~= 1e36
-
-This is wrong and will cause those LP tokens to be significantly overvalued, which can be exploited to take out debt positions where the health ratio (if properly calculated) would be way below 1.
+In the scenarios mentioned above, the price that is used for the ERC4626 tokens will be either way too high or low (depending on how the decimals differ), meaning that the health factor calculation no longer work correctly.
 
 ## Code Snippet
-https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/oracle/src/curve/Stable2CurveOracle.sol#L47
+https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/oracle/src/erc4626/ERC4626Oracle.sol#L41
 
 ## Tool used
 
@@ -22,8 +22,11 @@ Manual Review
 
 ## Recommendation
 ```
-return ((price0 < price1) ? price0 : price1).mulWadDown(
-            ICurvePool(token).get_virtual_price()
-           ).divWadDown(1e18);
+        uint decimals = IERC4626(token).decimals();
+        return IERC4626(token).previewRedeem(
+            10 ** decimals
+        ).mulDivDown(
+            oracleFacade.getPrice(IERC4626(token).asset()),
+            10 ** IERC4626(token).asset().decimals()
+        );
 ```
-This will correctly return ~1e18 in the above example, which is more or less the current price (1 ETH) of this LP token.

@@ -1,39 +1,19 @@
-icedpeachtea
-# isSequencerActive() uses startedAt instead of updatedAt
+oyc_109
+# No Transfer Ownership Pattern
 
 ## Summary
-`isSequencerActive()` determines whether the sequencer is active by checking `startedAt` instead of `updatedAt`.
+
+https://github.com/sherlock-audit/2022-08-sentiment-andyfeili/blob/96338b720493bc6dcbfa8ed24b75af53adc7900d/oracle/src/utils/Ownable.sol#L21-L25
 
 ## Vulnerability Detail
-The `isSequencerActive` function incorrectly uses `startedAt` to determine whether the data reported by Chainlink oracle is within grace period. Instead, it should use `updatedAt` which represents the timestamp of when the round was updated, not the timestamp of when the round started.
 
-## Impact
-`isSequencerActive` will return false even though the data provided by Chainlink oracle is valid and fresh. 
+In `Ownable.sol` the `transferOwnership()` function does not use a two step transfer of ownership pattern.
 
-## Code Snippet
+The current owership transfer process involves the current owner calling `transferOwnership()`.
+This function checks the new address is not the zero address and proceeds to write the new address into the `admin` state variable.
 
-```solidity
-// oracle/src/chainlink/ArbiChainlinkOracle.sol:65
-function isSequencerActive() internal view returns (bool) {
-        (, int256 answer, uint256 startedAt,,) = sequencer.latestRoundData();
-        if (block.timestamp - startedAt <= GRACE_PERIOD_TIME || answer == 1)
-            return false;
-        return true;
-    }
-```
-## Tool used
-
-Manual Review
-https://docs.chain.link/docs/price-feeds-api-reference/
+If the nominated EOA account is not a valid account, it is entirely possible the owner may accidentally transfer ownership to an uncontrolled account, breaking all functions which require the `adminOnly()` modifier. 
 
 ## Recommendation
-Use `updatedAt` instead.
 
-```solidity
-function isSequencerActive() internal view returns (bool) {
-        (, int256 answer,, uint256 updatedAt,) = sequencer.latestRoundData();
-        if (block.timestamp - updatedAt <= GRACE_PERIOD_TIME || answer == 1)
-            return false;
-        return true;
-    }
-```
+Implement a two step process where the owner nominates an account and the nominated account needs to call an acceptOwnership() function for the transfer to fully succeed. This ensures the nominated EOA account is a valid and active account.
