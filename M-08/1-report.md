@@ -1,40 +1,38 @@
-icedpeachtea
-# Account can be initialized multiple times if _accountManager is address(0)
+JohnSmith
+# Can not create LToken vaults with assets that do not conform to `IERC20Metadata`
 
-## Summary
-Account's contract `init` function can be reinit multiple times if `_accountManager` is `address(0)`.
-
-## Vulnerability Detail
-The if statement determines the `accountManager` is not `address(0)`, if yes it determines the contract is already initialized. However, it does not check whether the input `_accountManager` is `address(0)`. If it is, the `init` function can be called twice and other people (such as an attacker) can modify the `_accountManager` to his/her controlled address. 
-
-https://twitter.com/Hacxyk/status/1529389391818510337
-
-## Impact
-A misconfiguration of setting `_accountManager` to `address(0)` would open up possibilities for attacker to reinitialize the contract. 
-
-## Code Snippet
-- protocol/src/core/Account.sol:59
-
+https://github.com/sentimentxyz/protocol/blob/4e45871e4540df0f189f6c89deb8d34f24930120/src/tokens/utils/ERC4626.sol#L41
+## [M] Can not create LToken vaults with assets that do not conform to `IERC20Metadata`
+Some ERC20 tokens do not conform to `IERC20Metadata`, because it is OPTIONAL to do so, and as result call to `decimals()` may result in revert.
+### Proof of Concept
 ```solidity
-function init(address _accountManager) external {
-        if (accountManager != address(0)) 
-            revert Errors.ContractAlreadyInitialized();
-        accountManager = _accountManager;
-    }
+protocol/src/tokens/utils/ERC4626.sol
+35:     function initERC4626(
+36:         ERC20 _asset,
+37:         string memory _name,
+38:         string memory _symbol
+39:     ) internal {
+40:         asset = _asset;
+41:         initERC20(_name, _symbol, asset.decimals()); //@audit asset.decimals() may revert
+42:     }
 ```
-
-## Tool used
-
-Manual Review
-
-## Recommendation
-Prevent `_accountManager` to be `address(0)` when calling the function.
-
-```solidity
-function init(address _accountManager) external {
-        require(_accountManager != address(0), "Cannot init as 0x0 address!");
-        if (accountManager != address(0)) 
-            revert Errors.ContractAlreadyInitialized();
-        accountManager = _accountManager;
+### Mitigation
+We can mitigate this by doing something like OpenZeppelin did:
+https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/token/ERC20/extensions/ERC4626.sol#L36-L41
+```diff
+function initERC4626(
+        ERC20 _asset,
+        string memory _name,
+        string memory _symbol
+    ) internal {
+        asset = _asset;
+-       initERC20(_name, _symbol, asset.decimals());
++	uint8 decimals_;
++	try IERC20Metadata(address(asset_)).decimals() returns (uint8 value) {
++	decimals_ = value;
++	} catch {
++		decimals_ = 18;
++	}
++	initERC20(_name, _symbol, decimals_);
     }
 ```

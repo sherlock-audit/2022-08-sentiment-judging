@@ -1,23 +1,32 @@
 Lambda
-# LEther: Flash loan can be used to manipulate borrow rate
+# CTokenOracle: Wrong price for CEther
 
 ## Summary
-`LEther` mistakenly does not call `beforeDeposit` before a deposit happens, which can be exploited to reduce interest significantly.
+The value that is returned by `CTokenOracle` for cETH leads to wrong exchange calculations.
 
 ## Vulnerability Detail
-In `depositEth` within `LEther`, `beforeDeposit` which updates the state is not called. Because of that, the utilization can be manipulated within a single transaction. As this is unintended behavior, there are potentially more ways to exploit it (combination of borrowing, depositing, withdrawing, etc...), but one way how it can be exploited to reduce interest significantly is documented below.
+The exchange rate that is returned by `exchangeRateStored()` should not be multiplied by 1e18, this leads to wrong values.
 
 ## Impact
-Someone who has borrowed money (and therefore wants to reduce interest) takes out a huge ETH flash loan and deposits the ETH via `depositEth()`. Then, he calls `updateState()` which now uses the significantly increased (W)ETH balance. Therefore, utilization will be almost 0 and almost no interest will be accrued. Afterwards, he calls `redeemEth()` and pays back the flashloan.
 
-Note that this attack is most effective when `updateState()` was not called for a long time. However, it can also be performed multiple times (e.g., front-running all transactions that would update the state) such that interest is never properly accrued.
+For instance, at the time of writing, 1 cETH = 0.020067 ETH and `exchangeRateStored` returns 200674139044261374629937592. cETH has 8 decimals (see https://etherscan.io/token/0x4ddc2d193948926d02f9b1fe9e1daa0718270ed5#readContract), but the system would return the following for `_valueInWei(address(cETH), 1e8)`:
+```
+((200674139044261374629937592 * 1e8) * 1e8) / 10 ** IERC20(cETH).decimals() =
+((200674139044261374629937592 * 1e8) * 1e8) / 10 ** 8 =
+~2e34
+```
+Which is completely wrong.
 
 ## Code Snippet
-https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/protocol/src/tokens/LEther.sol#L36
+https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/oracle/src/compound/CTokenOracle.sol#L63
 
 ## Tool used
 
 Manual Review
 
 ## Recommendation
-Call `beforeDeposit()` in `depositEth()` (and `beforeWithdraw()` in `redeemEth()`).
+Replace `getCEtherPrice()` with
+```
+return ICToken(cETHER).exchangeRateStored().divWadDown(1e10);
+```
+Then, the above calculation returns ~2e16, which is correct (1 cETH is currently worth roughly 2e16 wei, i.e. 0.02 ETH).

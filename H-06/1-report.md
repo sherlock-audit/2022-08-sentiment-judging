@@ -1,26 +1,27 @@
 Lambda
-# AccountManager: approve can be abused to drain an account by using UniswapV3Router
+# AccountManager: address(0) used for borrowing ETH
 
 ## Summary
-An account can `approve` UniswapV3Router, which then can drain the account.
+Using `address(0)` for borrowing ETH bricks an account.
 
 ## Vulnerability Detail
-It is only possible to `approve` addresses where a corresponding controller exists. However, one such address will be the `UniswapV3Router` (because it is intended to be used in other places) which provides the `multiCall` function. This can be abused like this:
-1.) Account A approves `UniswapV3Router` (via `AccountManager.approve`) for some ERC4626 vault. This succeeds because there is a controller for `UniswapV3Router`.
-2.) Account A mints those ERC4626 tokens and takes out a loan. Because of the ERC4626 tokens, his health ratio is 1.2
-3.) Some EOA B uses `UniswapV3Router.multicall` to call `withdraw(balanceOf(A), address(B), address(a))` for him. Because `UniswapV3Router` is approved to spend those tokens, this succeeds. After this call, the account of A is now drained and has a health ratio of 0. All assets belong to the EOA B (which will in practice be owned by the same person as the account A).
+According to the following line in `settle`, `address(0)` is a valid value for `borrows` and used to indicate ETH:
+https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/protocol/src/core/AccountManager.sol#L322
+While using `address(0)` in `borrow` (for `LEther`) would work, it would introduce different problems:
+- `address(0)` would be added to the assets of the account, meaning that `RiskEngine._getBalance` would always revert because it would always call `IERC20(assets[i]).balanceOf(account)`
+- A user could not call repay with `address(0)`, as this function reverts with this value in contrast to `borrow`
+- Because of the above issue, `settle` would actually also not work (although it has a special case for `address(0)`), because it calls `repay` with `address(0)` in such situations.
 
 ## Impact
-See vulnerability details, an account can be completely drained like this.
+As mentioned above, using `address(0)` in `borrow` completely bricks an account. Of course, it is up to the sentiment team if this value is actually allowed (because when `LTokenFor(address(0))` is not set, the call to `borrow` fails). However, as mentioned, it looks like `address(0)` is intended to be added to. `LTokenFor`, otherwise there is no reason to handle it in `settle`.
 
 ## Code Snippet
-https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/protocol/src/core/AccountManager.sol#L277
-
-https://github.com/Uniswap/v3-periphery/blob/8264326f537df1695b2074ccd5a772b48b5d7e5e/contracts/lens/UniswapInterfaceMulticall.sol#L27
+https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/protocol/src/core/RiskEngine.sol#L157
+https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/protocol/src/core/AccountManager.sol#L236
 
 ## Tool used
 
 Manual Review
 
 ## Recommendation
-Do not allow approving `UniswapV3Router`.
+Disallow using `address(0)` in `borrow`, i.e. `require` that `token != address(0)`.

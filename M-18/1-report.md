@@ -1,22 +1,19 @@
-Lambda
-# ATokenOracle: aETH not correctly handled
+oyc_109
+# No Transfer Ownership Pattern
 
 ## Summary
-`UNDERLYING_ASSET_ADDRESS()` of aETH is not correctly handled.
+
+https://github.com/sherlock-audit/2022-08-sentiment-andyfeili/blob/96338b720493bc6dcbfa8ed24b75af53adc7900d/oracle/src/utils/Ownable.sol#L21-L25
 
 ## Vulnerability Detail
-`UNDERLYING_ASSET_ADDRESS()` of aETH returns `0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE` (see https://docs.aave.com/developers/v/1.0/deployed-contracts/deployed-contract-instances or the actual contract: https://etherscan.io/address/0x3a3a65aab0dd2a17e3f1947ba16138cd37d08c04#readContract).
-However, Sentiment handles the price of ETH by either requesting the value for `address(0)` or WETH.
 
-## Impact
-The ETH price will not be returned for aETH, the call will instead revert (meaning that aETH cannot be used).
+In `Ownable.sol` the `transferOwnership()` function does not use a two step transfer of ownership pattern.
 
-## Code Snippet
-https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/oracle/src/aave/ATokenOracle.sol#L38
+The current owership transfer process involves the current owner calling `transferOwnership()`.
+This function checks the new address is not the zero address and proceeds to write the new address into the `admin` state variable.
 
-## Tool used
-
-Manual Review
+If the nominated EOA account is not a valid account, it is entirely possible the owner may accidentally transfer ownership to an uncontrolled account, breaking all functions which require the `adminOnly()` modifier. 
 
 ## Recommendation
-Check if `UNDERLYING_ASSET_ADDRESS()` returns `0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE`, request the price of `address(0)` in this case.
+
+Implement a two step process where the owner nominates an account and the nominated account needs to call an acceptOwnership() function for the transfer to fully succeed. This ensures the nominated EOA account is a valid and active account.

@@ -1,21 +1,33 @@
 Lambda
-# ChainlinkOracle: Age of response not validated
+# CTokenOracle: Missing normalization by 10^18
 
 ## Summary
-The responses of chainlink oracles are allowed to be arbitrarily old, which can be exploited to drain the protocol.
+The prices that are returned by `getCErc20Price` need to be normalized.
 
 ## Vulnerability Detail
-`ChainlinkOracle` uses the latest value of `latestRoundData()`, no matter how old it is. 
+In `getCErc20Price`, there is a multiplication of the CErc20/Erc20 price by the Erc20/ETH price in the end. However, because the Erc20/ETH price is returned with 18 decimals, a division by 1e18 is needed in the end.
 
 ## Impact
-If a chainlink feed was not updated in a long time and the price dropped, an attacker can buy a lot of these tokens and deposit them as collateral. The system will still use the old price, but the tokens may be almost valueless (e.g., UST) now. Because of this, the attacker can take out loans even if his health factor (with the real price) would be significantly below 1.
+The prices are currently wrong.
+Let's take cUSDC (https://etherscan.io/token/0x39aa39c021dfbae8fac545936693ac917d5e7563#readContract) with a current price of ~0.000014 ETH. Currently, `exchangeRateStored()` is 226405222044735 and `getCErc20Price` would return:
+```
+((226405222044735 * 1e8) / 1e6) * oracle.getPrice(address(USDC) = 
+((226405222044735 * 1e8) / 1e6) * 626633162680235 = 
+1.41e31 
+```
 
 ## Code Snippet
-https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/oracle/src/chainlink/ChainlinkOracle.sol#L67
+https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/oracle/src/compound/CTokenOracle.sol#L73
 
 ## Tool used
 
 Manual Review
 
 ## Recommendation
-Validate `updatedAt` of `latestRoundData()` and check that the price age is not above a threshold. If it is, do not allow operations with this token.
+```
+        return cToken.exchangeRateStored()
+        .mulDivDown(1e8 , IERC20(underlying).decimals())
+        .mulWadDown(oracle.getPrice(underlying))
+        .divWadDown(1e18);
+```
+Then, the above example returns 1.41e13, which is correct.

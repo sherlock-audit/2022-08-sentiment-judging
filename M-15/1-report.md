@@ -1,23 +1,81 @@
-Lambda
-# ChainlinkOracle: Assumes all feeds have 8 decimals
+ladboy233
+# Oracle Consideration: Curve price oracle can return invalid price data.
 
 ## Summary
-There is a wrong assumption about the feed decimals in `ChainlinkOracle` which causes it to return wrong prices.
-Edit: Just saw in the previous audit report that this was already documented and the team plans to only use feeds with 8 decimal places. Still seems quite risky to me, because the system will be broken if one feed is chosen with more decimals (and it is not validated that they have 8 decimals), but downgrading to Medium because of that.
+
+the curve oracle in 
+
+``` 
+ Stable2CurveOracle.sol
+```
+
+the oracle data can be rounded to 0 or return invalid data.
 
 ## Vulnerability Detail
-The answer of the chainlink oracle is multiplied by 10^18 and then divided by the ETH/USD price feed. In `_valueInWei` within `RiskOracle`, this price is then multiplied by the token amount and divided by 10^decimals to get the value in wei (18 decimals). While this would be correct when all chainlink feeds would have the same number of decimals, this is not the case. See for instance https://ethereum.stackexchange.com/questions/92508/do-all-chainlink-feeds-return-prices-with-8-decimals-of-precision for a discussion of this. Non-ETH pairs (such as the ETH / USD feed that is used) have 8 decimals, whereas ETH pairs have 18.
+
+In Stable2CurveOracle.sol
+
+the getPrice is implemented as shown below.
+
+```
+    /// @inheritdoc IOracle
+    function getPrice(address token) external view returns (uint) {
+        uint price0 = oracleFacade.getPrice(ICurvePool(token).coins(0));
+        uint price1 = oracleFacade.getPrice(ICurvePool(token).coins(1));
+        return ((price0 < price1) ? price0 : price1).mulWadDown(
+            ICurvePool(token).get_virtual_price()
+        );
+    }
+```
+
+we get price0 and price1 and use whatever the small number is and divde by virtual price.
+
+When price0 and price1 has a huge price difference (when the curve pool in very imbalanced), the above approach can report undervalued oracle data.
+
+Or if both price0 and price1 is smaller than the virtual price,
+
+because of the division logic
+
+```
+ ((price0 < price1) ? price0 : price1).mulWadDown(ICurvePool(token).get_virtual_price())
+```
+
+the oracle data would be rounded to 0.
 
 ## Impact
-The price that is returned by `getPrice(token)` has 28 decimals (18 + 18 - 8), leading to completely wrong prices. This can be exploited to open lending positions where the health factor (if it would be calculated correctly) is way below 1.
+
+If the oracle data is invalid because of imbalanced token pool or very small price0 / price1, then the function _valueIn can get the invalid or lagging oracle and determine the wrong number of debt or callateral worth. User may not able to deposit or repay to manage their position or malicious liquidators can liquidated user's account balance.
+
+```
+    function _valueInWei(address token, uint amt)
+        internal
+        view
+        returns (uint)
+    {
+        return oracle.getPrice(token)
+        .mulDivDown(
+            amt,
+            10 ** ((token == address(0)) ? 18 : IERC20(token).decimals())
+        );
+    }
+```
 
 ## Code Snippet
-https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/oracle/src/chainlink/ChainlinkOracle.sol#L57
-https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/protocol/src/core/RiskEngine.sol#L186
 
 ## Tool used
 
 Manual Review
 
+Yes
+
 ## Recommendation
-Normalize the price to 18 decimals.
+
+To avoid price manipulation, using the virtual price would be sufficient,
+
+https://news.curve.fi/chainlink-oracles-and-curve-pools/
+
+```
+    function getPrice(address token) external view returns (uint) {
+        return  ICurvePool(token).get_virtual_price();
+    }
+```

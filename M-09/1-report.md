@@ -1,39 +1,41 @@
-icedpeachtea
-# isSequencerActive() uses startedAt instead of updatedAt
+defsec
+# Should check return data from chainlink aggregators
 
 ## Summary
-`isSequencerActive()` determines whether the sequencer is active by checking `startedAt` instead of `updatedAt`.
+
+The external Chainlink oracle, which provides index price information to the system, introduces risk inherent to any dependency on third-party data sources. For example, the oracle could fall behind or otherwise fail to be maintained, resulting in outdated data being fed to protocol.
+
+## Severity
+Medium
 
 ## Vulnerability Detail
-The `isSequencerActive` function incorrectly uses `startedAt` to determine whether the data reported by Chainlink oracle is within grace period. Instead, it should use `updatedAt` which represents the timestamp of when the round was updated, not the timestamp of when the round started.
+
+The getPrice function in the contract ChainlinkOracle.sol fetches the asset price from a Chainlink aggregator using the latestRoundData function. However, there are no checks on roundID nor timeStamp, resulting in stale prices. The oracle wrapper calls out to a chainlink oracle receiving the latestRoundData(). It then checks freshness by verifying that the answer is indeed for the last known round. The returned updatedAt timestamp is not checked.
 
 ## Impact
-`isSequencerActive` will return false even though the data provided by Chainlink oracle is valid and fresh. 
+
+Stale prices could put funds at risk. According to Chainlink's documentation, This function does not error if no answer has been reached but returns 0, causing an incorrect price fed to the PriceOracle. The external Chainlink oracle, which provides index price information to the system, introduces risk inherent to any dependency on third-party data sources. For example, the oracle could fall behind or otherwise fail to be maintained, resulting in outdated data being fed to protocol
 
 ## Code Snippet
 
-```solidity
-// oracle/src/chainlink/ArbiChainlinkOracle.sol:65
-function isSequencerActive() internal view returns (bool) {
-        (, int256 answer, uint256 startedAt,,) = sequencer.latestRoundData();
-        if (block.timestamp - startedAt <= GRACE_PERIOD_TIME || answer == 1)
-            return false;
-        return true;
-    }
-```
-## Tool used
+[ChainlinkOracle.sol#L67](https://github.com/sherlock-audit/2022-08-sentiment-defsec/blob/main/oracle/src/chainlink/ChainlinkOracle.sol#L67)
 
+## Tool used
 Manual Review
-https://docs.chain.link/docs/price-feeds-api-reference/
 
 ## Recommendation
-Use `updatedAt` instead.
+
+Consider to add checks on the return data with proper revert messages if the price is stale or the round is incomplete, for example:
 
 ```solidity
-function isSequencerActive() internal view returns (bool) {
-        (, int256 answer,, uint256 updatedAt,) = sequencer.latestRoundData();
-        if (block.timestamp - updatedAt <= GRACE_PERIOD_TIME || answer == 1)
-            return false;
-        return true;
-    }
+(uint80 roundID, int256 price, , uint256 timeStamp, uint80 answeredInRound) = ETH_CHAINLINK.latestRoundData();
+require(price > 0, "Chainlink price <= 0"); 
+require(answeredInRound >= roundID, "...");
+require(timeStamp != 0, "...");
 ```
+
+## Team  
+-
+
+## Sherlock  
+- 

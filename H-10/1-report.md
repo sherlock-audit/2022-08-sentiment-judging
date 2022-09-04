@@ -1,29 +1,31 @@
 Lambda
-# Stable2CurveOracle: Missing normalization
+# UniV2LPOracle: Decimals of pair tokens ignored
 
 ## Summary
-The price that is returned by `getPrice()` of `Stable2CurveOracle` is not normalized to 10^18, leading to wrong values for those tokens.
+`UniV2LPOracle` does not take into account how many decimals the reserve tokens have, leading to wrong values.
 
 ## Vulnerability Detail
-`oracleFacade.getPrice(ICurvePool(token).coins(0))` returns a price with 18 decimals. However, `ICurvePool(token).get_virtual_price()` also returns a price that is normalized to 18 decimals. This is for instance visible in the source code of the stETH / ETH pool: `@return LP token virtual price normalized to 1e18` (https://etherscan.io/address/0xDC24316b9AE028F1497c275EB9192a3Ea0f67022#code)
+`getReserves()` returns the tokens in their decimals. Therefore, we have in the calculation (see the comments for the calculations):
+```
+        return FixedPointMathLib.sqrt(
+            r0 //d1 decimals
+            .mulWadDown(r1) //d2 decimals
+            .mulWadDown(oracle.getPrice(IUniswapV2Pair(pair).token0())) //18 decimals
+            .mulWadDown(oracle.getPrice(IUniswapV2Pair(pair).token1())) //18 decimals
+        ) // (d1 + d2 + 36)/2 decimals
+        .mulDivDown(2e27, IUniswapV2Pair(pair).totalSupply()); // (d1 + d2 + 36)/2 + 27 - 18 decimals
+```
+Meaning that the returned value will not have 18 decimals.
 
 ## Impact
-The returned prices for the LP tokens will have 36 decimals. For instance, the stETH / ETH `get_virtual_price()` at the time of writing is 1049449001674373194. Assuming stETH is 0.95 ETH (9.5 * 1e17), the returned value will be:
-1049449001674373194 * 9.5 * 1e17 ~= 1e36
-
-This is wrong and will cause those LP tokens to be significantly overvalued, which can be exploited to take out debt positions where the health ratio (if properly calculated) would be way below 1.
+The price that is used for those LP tokens will be way too high, which can be exploited to create debt positions with a health ratio below 1.
 
 ## Code Snippet
-https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/oracle/src/curve/Stable2CurveOracle.sol#L47
+https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/oracle/src/uniswap/UniV2LPOracle.sol#L49
 
 ## Tool used
 
 Manual Review
 
 ## Recommendation
-```
-return ((price0 < price1) ? price0 : price1).mulWadDown(
-            ICurvePool(token).get_virtual_price()
-           ).divWadDown(1e18);
-```
-This will correctly return ~1e18 in the above example, which is more or less the current price (1 ETH) of this LP token.
+Normalize (taking into account the decimals of the reserves) to have a result with 18 decimals.

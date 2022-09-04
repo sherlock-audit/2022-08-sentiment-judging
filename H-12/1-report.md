@@ -1,32 +1,29 @@
 Lambda
-# CTokenOracle: Wrong price for CEther
+# Stable2CurveOracle: Missing normalization
 
 ## Summary
-The value that is returned by `CTokenOracle` for cETH leads to wrong exchange calculations.
+The price that is returned by `getPrice()` of `Stable2CurveOracle` is not normalized to 10^18, leading to wrong values for those tokens.
 
 ## Vulnerability Detail
-The exchange rate that is returned by `exchangeRateStored()` should not be multiplied by 1e18, this leads to wrong values.
+`oracleFacade.getPrice(ICurvePool(token).coins(0))` returns a price with 18 decimals. However, `ICurvePool(token).get_virtual_price()` also returns a price that is normalized to 18 decimals. This is for instance visible in the source code of the stETH / ETH pool: `@return LP token virtual price normalized to 1e18` (https://etherscan.io/address/0xDC24316b9AE028F1497c275EB9192a3Ea0f67022#code)
 
 ## Impact
+The returned prices for the LP tokens will have 36 decimals. For instance, the stETH / ETH `get_virtual_price()` at the time of writing is 1049449001674373194. Assuming stETH is 0.95 ETH (9.5 * 1e17), the returned value will be:
+1049449001674373194 * 9.5 * 1e17 ~= 1e36
 
-For instance, at the time of writing, 1 cETH = 0.020067 ETH and `exchangeRateStored` returns 200674139044261374629937592. cETH has 8 decimals (see https://etherscan.io/token/0x4ddc2d193948926d02f9b1fe9e1daa0718270ed5#readContract), but the system would return the following for `_valueInWei(address(cETH), 1e8)`:
-```
-((200674139044261374629937592 * 1e8) * 1e8) / 10 ** IERC20(cETH).decimals() =
-((200674139044261374629937592 * 1e8) * 1e8) / 10 ** 8 =
-~2e34
-```
-Which is completely wrong.
+This is wrong and will cause those LP tokens to be significantly overvalued, which can be exploited to take out debt positions where the health ratio (if properly calculated) would be way below 1.
 
 ## Code Snippet
-https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/oracle/src/compound/CTokenOracle.sol#L63
+https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/oracle/src/curve/Stable2CurveOracle.sol#L47
 
 ## Tool used
 
 Manual Review
 
 ## Recommendation
-Replace `getCEtherPrice()` with
 ```
-return ICToken(cETHER).exchangeRateStored().divWadDown(1e10);
+return ((price0 < price1) ? price0 : price1).mulWadDown(
+            ICurvePool(token).get_virtual_price()
+           ).divWadDown(1e18);
 ```
-Then, the above calculation returns ~2e16, which is correct (1 cETH is currently worth roughly 2e16 wei, i.e. 0.02 ETH).
+This will correctly return ~1e18 in the above example, which is more or less the current price (1 ETH) of this LP token.

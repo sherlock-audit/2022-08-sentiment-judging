@@ -1,27 +1,24 @@
 Lambda
-# AccountManager: Liquidations not possible when transfer fails
+# Oracle Flashloans attacks to force liquidations possible
 
 ## Summary
-When the transfer of one asset fails, liquidations become impossible.
 
 ## Vulnerability Detail
-`_liquidate` calls `sweepTo`, which iterates over all assets. When one of those transfers fails, the whole liquidation process therefore fails. There are multiple reasons why a transfer could fail:
-1.) Blocked addresses (e.g., USDC)
-2.) The balance of the asset is 0, but it is still listed under asset. This can be for instance triggered by performing a 0 value Uniswap swap, in which case it is still added to `tokensIn`. Another way to trigger is to call `deposit` with `amt = 0` (this is another issue that should be fixed IMO, in practice the assets of an account should not contain any tokens with zero balance)
-Some tokens revert for zero value transfers (see https://github.com/d-xo/weird-erc20)
-3.) Paused tokens
-4.) Upgradeable tokens that changed the implementation.
+Some of the used oracles can be manipulated with flashloans:
+
+- The curve tricrypto pool only has a market cap of $399.3k at the time of writing. Therefore, the WETH price that is directly retrieved from the pool (`pool.price_oracle(1)`) could easily be manipulated with a flashloan.
+- yearns `pricePerShare()` is manipulable by flashloans, which was exploited previously: https://medium.com/cream-finance/post-mortem-exploit-oct-27-507b12bb6f8e
+- Compounds `exchangeRateStored()` directly queries balances and is manipulable (see e.g. the cETH code: https://etherscan.io/token/0x4ddc2d193948926d02f9b1fe9e1daa0718270ed5#code)
 
 ## Impact
-See above, an account cannot be liquidated. In certain conditions, this might even be triggerable by the user. For instance, a user could try to get on the USDC blacklist to avoid liquidations.
+An attacker can use flashloans to force liquidations of users that hold these assets. They will be liquidated, although their health ratio (if properly calculated) would be significantly higher.
 
 ## Code Snippet
-https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/protocol/src/core/AccountManager.sol#L384
-https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/protocol/src/core/Account.sol#L166
+https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/oracle/src/curve/CurveTriCryptoOracle.sol#L52
 
 ## Tool used
 
 Manual Review
 
 ## Recommendation
-Catch reversions for the transfer and skip this asset (but it could be kept in the assets list to allow retries later on).
+Use flashloan-resistant oracles.

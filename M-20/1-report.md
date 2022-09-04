@@ -1,21 +1,40 @@
-Lambda
-# LToken: Borrow rate manipulation possible
+icedpeachtea
+# Account can be initialized multiple times if _accountManager is address(0)
 
 ## Summary
-There are situations where it is possible to manipulate the utilization in order to reduce the accrued interest.
+Account's contract `init` function can be reinit multiple times if `_accountManager` is `address(0)`.
 
 ## Vulnerability Detail
-`getRateFactor()` passes `asset.balanceOf(address(this))` to the calculation of the borrow rate, which uses the value for the utilization calculation. Someone who has borrowed a lot (and therefore wants that the interest stays low), can increase this value before the interest rate accrual to keep the utilization rate low. While every call to `deposit` calls `updateState()` (which makes this attack not possible), it is possible to transfers assets into the contract before the call to `updateState()`. The assets will be lost, but it can still be beneficial if `updateState()` was not called in a long time (meaning that the reduction in accrued interest is large).
+The if statement determines the `accountManager` is not `address(0)`, if yes it determines the contract is already initialized. However, it does not check whether the input `_accountManager` is `address(0)`. If it is, the `init` function can be called twice and other people (such as an attacker) can modify the `_accountManager` to his/her controlled address. 
+
+https://twitter.com/Hacxyk/status/1529389391818510337
 
 ## Impact
-Imagine the extreme case where Bob is the only borrower and the interest rate was not accrued for one year. Because utilization is very low, the accrued interest would be very high. Bob calculates that it is better for him to first transfer some assets to the LToken contract (that will be locked up forever) and then call `updateState()`. This results in a loss of interest for the borrowers.
+A misconfiguration of setting `_accountManager` to `address(0)` would open up possibilities for attacker to reinitialize the contract. 
 
 ## Code Snippet
-https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/protocol/src/tokens/LToken.sol#L223
+- protocol/src/core/Account.sol:59
+
+```solidity
+function init(address _accountManager) external {
+        if (accountManager != address(0)) 
+            revert Errors.ContractAlreadyInitialized();
+        accountManager = _accountManager;
+    }
+```
 
 ## Tool used
 
 Manual Review
 
 ## Recommendation
-Track the deposited assets in `ERC4626`, use that value instead of the balance.
+Prevent `_accountManager` to be `address(0)` when calling the function.
+
+```solidity
+function init(address _accountManager) external {
+        require(_accountManager != address(0), "Cannot init as 0x0 address!");
+        if (accountManager != address(0)) 
+            revert Errors.ContractAlreadyInitialized();
+        accountManager = _accountManager;
+    }
+```

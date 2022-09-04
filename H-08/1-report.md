@@ -1,31 +1,26 @@
 Lambda
-# UniV2LPOracle: Decimals of pair tokens ignored
+# AccountManager: approve can be abused to drain an account by using UniswapV3Router
 
 ## Summary
-`UniV2LPOracle` does not take into account how many decimals the reserve tokens have, leading to wrong values.
+An account can `approve` UniswapV3Router, which then can drain the account.
 
 ## Vulnerability Detail
-`getReserves()` returns the tokens in their decimals. Therefore, we have in the calculation (see the comments for the calculations):
-```
-        return FixedPointMathLib.sqrt(
-            r0 //d1 decimals
-            .mulWadDown(r1) //d2 decimals
-            .mulWadDown(oracle.getPrice(IUniswapV2Pair(pair).token0())) //18 decimals
-            .mulWadDown(oracle.getPrice(IUniswapV2Pair(pair).token1())) //18 decimals
-        ) // (d1 + d2 + 36)/2 decimals
-        .mulDivDown(2e27, IUniswapV2Pair(pair).totalSupply()); // (d1 + d2 + 36)/2 + 27 - 18 decimals
-```
-Meaning that the returned value will not have 18 decimals.
+It is only possible to `approve` addresses where a corresponding controller exists. However, one such address will be the `UniswapV3Router` (because it is intended to be used in other places) which provides the `multiCall` function. This can be abused like this:
+1.) Account A approves `UniswapV3Router` (via `AccountManager.approve`) for some ERC4626 vault. This succeeds because there is a controller for `UniswapV3Router`.
+2.) Account A mints those ERC4626 tokens and takes out a loan. Because of the ERC4626 tokens, his health ratio is 1.2
+3.) Some EOA B uses `UniswapV3Router.multicall` to call `withdraw(balanceOf(A), address(B), address(a))` for him. Because `UniswapV3Router` is approved to spend those tokens, this succeeds. After this call, the account of A is now drained and has a health ratio of 0. All assets belong to the EOA B (which will in practice be owned by the same person as the account A).
 
 ## Impact
-The price that is used for those LP tokens will be way too high, which can be exploited to create debt positions with a health ratio below 1.
+See vulnerability details, an account can be completely drained like this.
 
 ## Code Snippet
-https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/oracle/src/uniswap/UniV2LPOracle.sol#L49
+https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/protocol/src/core/AccountManager.sol#L277
+
+https://github.com/Uniswap/v3-periphery/blob/8264326f537df1695b2074ccd5a772b48b5d7e5e/contracts/lens/UniswapInterfaceMulticall.sol#L27
 
 ## Tool used
 
 Manual Review
 
 ## Recommendation
-Normalize (taking into account the decimals of the reserves) to have a result with 18 decimals.
+Do not allow approving `UniswapV3Router`.

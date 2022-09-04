@@ -1,24 +1,22 @@
-oyc_109
-# Failed transfer with low level call won't revert
+JohnSmith
+# Denial of Service by well funded first user
 
-## Summary
+## [M] Denial of Service by well funded first user
+### Problem
+First user can manipulate share price by sending tokens to the system externally.
+They can setup a front-running got which will deposit higher amount than legit users, preventing them to buy a single share.
+### Proof of Concept
+- Alice buys first share for 1 wei. Price of 1 share becomes 1 wei;
+- Alice runs a front-running bot, which reads mempool;
+- Bob deposits arbitrary amount, i.e. 100 ether;
+- Alice's bot sends transaction with higher fee to ERC.transfer(address,uint) to LToken vault 100 ether or more
+- Share price becomes 100 ether + 1wei or more;
+- Bob's transaction reverts because his amount sent is not enough to buy a single share;
+- Alice or her bot then can redeem assets;
+- As result nobody can deposit, and nothing to borrow;
 
-https://github.com/sherlock-audit/2022-08-sentiment-andyfeili/blob/96338b720493bc6dcbfa8ed24b75af53adc7900d/protocol/src/core/Account.sol#L149-L156
-
-## Vulnerability Detail
-
-An account can call an arbitrary contract using the `exec()` function. The function should return success True if transaction was successful, false otherwise. 
-
-However low level calls (call, delegate call and static call) return success if the called contract doesn’t exist (not deployed or destructed). This could result in the call failing, however success will be set to true, which means the call will not revert but fail silently. 
-
-https://github.com/sherlock-audit/2022-08-sentiment-andyfeili/blob/96338b720493bc6dcbfa8ed24b75af53adc7900d/protocol/src/core/AccountManager.sol#L306-L308
-
-Reference: [Solidity Docs](https://docs.soliditylang.org/en/develop/control-structures.html#error-handling-assert-require-revert-and-exceptions)
-
-## Recommendation
-
-Add validation to target address
-
-```solidity
-require(0 != address(target).code.length)
-```
+When Alice pays for gas, you pay for reputation damage.
+### Mitigation
+- Use Flashbots to avoid mempool.
+- Force users to deposit at least some amount in the LToken vault (Uniswap forces users to pay at least 1e18).
+That way the amount the attacker will need to ERC20.transfer to the system will be at least X * 1e18 instead of X which is unrealistic.

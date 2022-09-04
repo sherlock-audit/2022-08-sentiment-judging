@@ -1,35 +1,22 @@
-Avci
-#  Contract Locking Received Ethers 
+Lambda
+# AccountManager: Fee-On-Transfer tokens not supported
 
 ## Summary
-Contract locking ether that comes into 
+Fee-on-transfer tokens lead to problems in `AccountManager`.
 
 ## Vulnerability Detail
-Receive function is a payable and anyone can deposit ether to contract but function do not doing any operation with deposited ether. 
-
+`AccountManager` assumes when liquidating / repaying debt (see code snippets) that the transferred amount equals to the received amount, which is not the case for fee-on-transfer tokens.
 
 ## Impact
-Ether locks for ever in the contract Account.sol
+When a fee-on-transfer token is used, the debt is reduced by the whole amount, although only part of it is actually transferred to the `LToken`. This destroys the accounting of the `LToken` and is bad for the token holders.
 
 ## Code Snippet
-https://github.com/sentimentxyz/protocol/blob/4e45871e4540df0f189f6c89deb8d34f24930120/src/core/Account.sol#L196
-https://github.com/sentimentxyz/protocol/blob/4e45871e4540df0f189f6c89deb8d34f24930120/src/tokens/LEther.sol#L55
-
+https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/protocol/src/core/AccountManager.sol#L380
+https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/protocol/src/core/AccountManager.sol#L236
 
 ## Tool used
 
 Manual Review
 
 ## Recommendation
-If the function has nothing to do with money, it should revert it or remove payable.
-
-```receive() public payable { revert (); }```
-When the user tries to send eth to contract, receive() do revert eth to the user.
-
-```receive() public {}```
-When receive function doesn't have a payable attribute, the user can't send eth to contract.
-
-
-## Reference:
-https://github.com/crytic/slither/wiki/Detector-Documentation#contracts-that-lock-ether
-
+The actual amount that was transferred could be checked. However, not supporting fee-on-transfer tokens is also completely fine in my opinion. Maybe that is already intended, but I did not find anything and wanted to make sure that you are aware of the issues with these tokens.

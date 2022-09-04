@@ -1,84 +1,74 @@
-icedpeachtea
-# Insufficient validation in Oracle data feed
+ladboy233
+# Token approval not removed when account is closed in AccountManager.sol
 
 ## Summary
-When fetching prices from `latestRoundData`, there is not enough validation that ensures the price returned is not stale.
+
+Token approval allowances are not removed when the account is closed in AccountManager.sol
+
+then the account is marked as inactive and can be reactivated for another owner.
+
+The accounts could be at risk of having their token balances spent by a malicious third party if a previous owner of the account
+approved that controller as a spender.
 
 ## Vulnerability Detail
-The `getPrice` and `getEthPrice` function fetches oracle price from Chainlink using `latestRoundData`, there only exist one check to make sure the reported price is not negative value. As prices can never be negative value, this check is not needed. Instead, there should be sufficient checks to make sure Chainlink's reported price feed is fresh and not stale.
 
-https://docs.chain.link/docs/historical-price-data/#historical-rounds
-https://consensys.net/diligence/audits/2021/09/fei-protocol-v2-phase-1/#chainlinkoraclewrapper---latestrounddata-might-return-stale-results
+In AccountManager.sol, an account owner can approve spender using the function approve.
 
-## Impact
-Stale prices might be used.
-
-## Code Snippet
-- oracle/src/chainlink/ArbiChainlinkOracle.sol:51
-- oracle/src/chainlink/ChainlinkOracle.sol:51
-- oracle/src/chainlink/ChainlinkOracle.sol:67
-
-```solidity
-// oracle/src/chainlink/ArbiChainlinkOracle.sol:51
-function getPrice(address token) external view virtual returns (uint) {
-        (, int answer,,,) =
-            feed[token].latestRoundData();
-
-        if (answer < 0)
-            revert Errors.NegativePrice(token, address(feed[token]));
-
-        return (
-            (uint(answer)*1e18)/getEthPrice()
-        );
-    }
-
-// oracle/src/chainlink/ChainlinkOracle.sol:51
-function getPrice(address token) external view virtual returns (uint) {
-        (, int answer,,,) =
-            feed[token].latestRoundData();
-
-        if (answer < 0)
-            revert Errors.NegativePrice(token, address(feed[token]));
-
-        return (
-            (uint(answer)*1e18)/getEthPrice()
-        );
-    }
-
-// oracle/src/chainlink/ChainlinkOracle.sol:67
-function getEthPrice() internal view returns (uint) {
-        (, int answer,,,) =
-            ethUsdPriceFeed.latestRoundData();
-
-        if (answer < 0)
-            revert Errors.NegativePrice(address(0), address(ethUsdPriceFeed));
-
-        return uint(answer);
+```
+    function approve(
+        address account,
+        address token,
+        address spender,
+        uint amt
+    )
+        external
+        onlyOwner(account)
+    {
+        if(address(controller.controllerFor(spender)) == address(0))
+            revert Errors.FunctionCallRestricted();
+        account.safeApprove(token, spender, amt);
     }
 ```
+
+but when closeAccount is closed and marked as inactive but the token approval is not removed.
+
+```
+
+    /**
+        @notice Closes a specified account for a user
+        @dev Account can only be closed when the account has no debt
+            Emits AccountClosed(account, owner) event
+        @param _account Address of account to be closed
+    */
+    function closeAccount(address _account) public onlyOwner(_account) {
+        IAccount account = IAccount(_account);
+        if (account.activationBlock() == block.number)
+            revert Errors.AccountDeactivationFailure();
+        if (!account.hasNoDebt()) revert Errors.OutstandingDebt();
+        account.deactivate();
+        registry.closeAccount(_account);
+        inactiveAccountsOf[msg.sender].push(_account);
+        account.sweepTo(msg.sender);
+        emit AccountClosed(_account, msg.sender);
+    }
+```
+
+when a new user create an account, the protocol will first reactivate an inactive account,
+with existing token approval and the new owner of the account will inherit those approvals.
+
+## Impact
+
+The accounts could be at risk of having their token balances spent by a malicious third party if a previous owner of the account
+approved that controller as a spender.
+
+## Code Snippet
 
 ## Tool used
 
 Manual Review
-[Chainlink's deployed code](https://etherscan.io/address/0x986b5E1e1755e3C2440e960477f25201B0a8bbD4#code)
 
 ## Recommendation
 
-Validate data feed by:
-- Checking the returned `answer` is not 0.
-- Verify result is within an allowed margin of freshness by checking `updatedAt`.
-- Verify `answer` is indeed for the last known round. 
+Remove and revoke token approval allowance when account is closed.
 
-```solidity
-function getEthPrice() internal view returns (uint) {
-        (uint80 ethRoundID, int answer,, uint256 ethUpdatedAt, uint80 ethAnsweredinRound) =
-            ethUsdPriceFeed.latestRoundData();
-        require(ethUpdatedAt > block.timestamp - 3600, "ETH: Stale price");
-        require(ethAnsweredinRound == ethRoundID , "ETH: Answer is not for last known round!");
-        if (answer <= 0)
-            revert Errors.NegativePrice(address(0), address(ethUsdPriceFeed));
-
-        return uint(answer);
-    }
-```
-
+or remove the account and create a new account every time when the owner wants to create account.

@@ -1,81 +1,61 @@
-ladboy233
-# Oracle Consideration: Curve price oracle can return invalid price data.
+JohnSmith
+# Oracle data feed is insufficiently validated
 
-## Summary
-
-the curve oracle in 
-
-``` 
- Stable2CurveOracle.sol
+https://github.com/sentimentxyz/oracle/blob/59b26a3d8c295208437aad36c470386c9729a4bc/src/chainlink/ArbiChainlinkOracle.sol#L47-L59
+https://github.com/sentimentxyz/oracle/blob/59b26a3d8c295208437aad36c470386c9729a4bc/src/chainlink/ChainlinkOracle.sol#L49-L73
+## [M] Oracle data feed is insufficiently validated
+### Problem
+Oracle data feed is insufficiently validated. There is no check for stale price and round completeness.
+Price can be stale and can lead to wrong prices returned
+### Proof of Concept
+```solidity
+oracle/src/chainlink/ArbiChainlinkOracle.sol
+47:     function getPrice(address token) external view override returns (uint) {
+48:         if (!isSequencerActive()) revert Errors.L2SequencerUnavailable();
+49: 
+50:         (, int answer,,,) =
+51:             feed[token].latestRoundData();
+52: 
+53:         if (answer < 0)
+54:             revert Errors.NegativePrice(token, address(feed[token]));
+55: 
+56:         return (
+57:             (uint(answer)*1e18)/getEthPrice()
+58:         );
+59:     }
 ```
 
-the oracle data can be rounded to 0 or return invalid data.
+```solidity
+oracle/src/chainlink/ChainlinkOracle.sol
+49:     function getPrice(address token) external view virtual returns (uint) {
+50:         (, int answer,,,) =
+51:             feed[token].latestRoundData();
+52: 
+53:         if (answer < 0)
+54:             revert Errors.NegativePrice(token, address(feed[token]));
+55: 
+56:         return (
+57:             (uint(answer)*1e18)/getEthPrice()
+58:         );
+59:     }
 
-## Vulnerability Detail
-
-In Stable2CurveOracle.sol
-
-the getPrice is implemented as shown below.
-
-```
-    /// @inheritdoc IOracle
-    function getPrice(address token) external view returns (uint) {
-        uint price0 = oracleFacade.getPrice(ICurvePool(token).coins(0));
-        uint price1 = oracleFacade.getPrice(ICurvePool(token).coins(1));
-        return ((price0 < price1) ? price0 : price1).mulWadDown(
-            ICurvePool(token).get_virtual_price()
-        );
-    }
-```
-
-we get price0 and price1 and use whatever the small number is and divde by virtual price.
-
-When price0 and price1 has a huge price difference (when the curve pool in very imbalanced), the above approach can report undervalued oracle data.
-
-Or if both price0 and price1 is smaller than the virtual price,
-
-because of the division logic
-
-```
- ((price0 < price1) ? price0 : price1).mulWadDown(ICurvePool(token).get_virtual_price())
+65:     function getEthPrice() internal view returns (uint) {
+66:         (, int answer,,,) =
+67:             ethUsdPriceFeed.latestRoundData();
+68: 
+69:         if (answer < 0)
+70:             revert Errors.NegativePrice(address(0), address(ethUsdPriceFeed));
+71: 
+72:         return uint(answer);
+73:     }
 ```
 
-the oracle data would be rounded to 0.
+### Mitigation
+```solidity
+(uint80 roundID, int answer, uint startedAt, uint timeStamp, uint80 answeredInRound) = priceFeed.latestRoundData();
 
-## Impact
+if (answer <= 0)revert Errors.ChainlinkInvalidPrice();
+if (answeredInRound < roundID) revert Errors.ChainlinkStalePrice();
+if (timestamp == 0 ) revert Errors.ChainlinkRoundNotComplete();
 
-If the oracle data is invalid because of imbalanced token pool or very small price0 / price1, then the function _valueIn can get the invalid or lagging oracle and determine the wrong number of debt or callateral worth. User may not able to deposit or repay to manage their position or malicious liquidators can liquidated user's account balance.
-
-```
-    function _valueInWei(address token, uint amt)
-        internal
-        view
-        returns (uint)
-    {
-        return oracle.getPrice(token)
-        .mulDivDown(
-            amt,
-            10 ** ((token == address(0)) ? 18 : IERC20(token).decimals())
-        );
-    }
-```
-
-## Code Snippet
-
-## Tool used
-
-Manual Review
-
-Yes
-
-## Recommendation
-
-To avoid price manipulation, using the virtual price would be sufficient,
-
-https://news.curve.fi/chainlink-oracles-and-curve-pools/
-
-```
-    function getPrice(address token) external view returns (uint) {
-        return  ICurvePool(token).get_virtual_price();
-    }
 ```
