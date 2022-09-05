@@ -1,40 +1,21 @@
-icedpeachtea
-# Account can be initialized multiple times if _accountManager is address(0)
+oyc_109
+# Chainlink oracle aggregator data is insufficiently validated
 
 ## Summary
-Account's contract `init` function can be reinit multiple times if `_accountManager` is `address(0)`.
+
+https://github.com/sherlock-audit/2022-08-sentiment-andyfeili/blob/96338b720493bc6dcbfa8ed24b75af53adc7900d/oracle/src/chainlink/ChainlinkOracle.sol#L49-L73
 
 ## Vulnerability Detail
-The if statement determines the `accountManager` is not `address(0)`, if yes it determines the contract is already initialized. However, it does not check whether the input `_accountManager` is `address(0)`. If it is, the `init` function can be called twice and other people (such as an attacker) can modify the `_accountManager` to his/her controlled address. 
 
-https://twitter.com/Hacxyk/status/1529389391818510337
-
-## Impact
-A misconfiguration of setting `_accountManager` to `address(0)` would open up possibilities for attacker to reinitialize the contract. 
-
-## Code Snippet
-- protocol/src/core/Account.sol:59
-
-```solidity
-function init(address _accountManager) external {
-        if (accountManager != address(0)) 
-            revert Errors.ContractAlreadyInitialized();
-        accountManager = _accountManager;
-    }
-```
-
-## Tool used
-
-Manual Review
+The function getPrice() and getEthPrice() fetches the latestRoundData() from a Chainlink oracle feed. However, neither round completeness or the quoted timestamp are checked to ensure that the reported price is not stale.
 
 ## Recommendation
-Prevent `_accountManager` to be `address(0)` when calling the function.
 
+Add additional validation to check if the price is stale and round is complete
+
+eg.
 ```solidity
-function init(address _accountManager) external {
-        require(_accountManager != address(0), "Cannot init as 0x0 address!");
-        if (accountManager != address(0)) 
-            revert Errors.ContractAlreadyInitialized();
-        accountManager = _accountManager;
-    }
+ (uint80 roundID, int256 answer, , uint256 updatedAt, uint80 answeredInRound) = feed.latestRoundData();
+require(answeredInRound >= roundID, "ChainLink: Stale price");
+require(updatedAt != 0, "ChainLink: Round not complete");
 ```

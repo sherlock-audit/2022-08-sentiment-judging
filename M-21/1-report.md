@@ -1,39 +1,40 @@
 icedpeachtea
-# isSequencerActive() uses startedAt instead of updatedAt
+# Account can be initialized multiple times if _accountManager is address(0)
 
 ## Summary
-`isSequencerActive()` determines whether the sequencer is active by checking `startedAt` instead of `updatedAt`.
+Account's contract `init` function can be reinit multiple times if `_accountManager` is `address(0)`.
 
 ## Vulnerability Detail
-The `isSequencerActive` function incorrectly uses `startedAt` to determine whether the data reported by Chainlink oracle is within grace period. Instead, it should use `updatedAt` which represents the timestamp of when the round was updated, not the timestamp of when the round started.
+The if statement determines the `accountManager` is not `address(0)`, if yes it determines the contract is already initialized. However, it does not check whether the input `_accountManager` is `address(0)`. If it is, the `init` function can be called twice and other people (such as an attacker) can modify the `_accountManager` to his/her controlled address. 
+
+https://twitter.com/Hacxyk/status/1529389391818510337
 
 ## Impact
-`isSequencerActive` will return false even though the data provided by Chainlink oracle is valid and fresh. 
+A misconfiguration of setting `_accountManager` to `address(0)` would open up possibilities for attacker to reinitialize the contract. 
 
 ## Code Snippet
+- protocol/src/core/Account.sol:59
 
 ```solidity
-// oracle/src/chainlink/ArbiChainlinkOracle.sol:65
-function isSequencerActive() internal view returns (bool) {
-        (, int256 answer, uint256 startedAt,,) = sequencer.latestRoundData();
-        if (block.timestamp - startedAt <= GRACE_PERIOD_TIME || answer == 1)
-            return false;
-        return true;
+function init(address _accountManager) external {
+        if (accountManager != address(0)) 
+            revert Errors.ContractAlreadyInitialized();
+        accountManager = _accountManager;
     }
 ```
+
 ## Tool used
 
 Manual Review
-https://docs.chain.link/docs/price-feeds-api-reference/
 
 ## Recommendation
-Use `updatedAt` instead.
+Prevent `_accountManager` to be `address(0)` when calling the function.
 
 ```solidity
-function isSequencerActive() internal view returns (bool) {
-        (, int256 answer,, uint256 updatedAt,) = sequencer.latestRoundData();
-        if (block.timestamp - updatedAt <= GRACE_PERIOD_TIME || answer == 1)
-            return false;
-        return true;
+function init(address _accountManager) external {
+        require(_accountManager != address(0), "Cannot init as 0x0 address!");
+        if (accountManager != address(0)) 
+            revert Errors.ContractAlreadyInitialized();
+        accountManager = _accountManager;
     }
 ```

@@ -1,19 +1,24 @@
 oyc_109
-# No Transfer Ownership Pattern
+# Failed transfer with low level call won't revert
 
 ## Summary
 
-https://github.com/sherlock-audit/2022-08-sentiment-andyfeili/blob/96338b720493bc6dcbfa8ed24b75af53adc7900d/oracle/src/utils/Ownable.sol#L21-L25
+https://github.com/sherlock-audit/2022-08-sentiment-andyfeili/blob/96338b720493bc6dcbfa8ed24b75af53adc7900d/protocol/src/core/Account.sol#L149-L156
 
 ## Vulnerability Detail
 
-In `Ownable.sol` the `transferOwnership()` function does not use a two step transfer of ownership pattern.
+An account can call an arbitrary contract using the `exec()` function. The function should return success True if transaction was successful, false otherwise. 
 
-The current owership transfer process involves the current owner calling `transferOwnership()`.
-This function checks the new address is not the zero address and proceeds to write the new address into the `admin` state variable.
+However low level calls (call, delegate call and static call) return success if the called contract doesn’t exist (not deployed or destructed). This could result in the call failing, however success will be set to true, which means the call will not revert but fail silently. 
 
-If the nominated EOA account is not a valid account, it is entirely possible the owner may accidentally transfer ownership to an uncontrolled account, breaking all functions which require the `adminOnly()` modifier. 
+https://github.com/sherlock-audit/2022-08-sentiment-andyfeili/blob/96338b720493bc6dcbfa8ed24b75af53adc7900d/protocol/src/core/AccountManager.sol#L306-L308
+
+Reference: [Solidity Docs](https://docs.soliditylang.org/en/develop/control-structures.html#error-handling-assert-require-revert-and-exceptions)
 
 ## Recommendation
 
-Implement a two step process where the owner nominates an account and the nominated account needs to call an acceptOwnership() function for the transfer to fully succeed. This ensures the nominated EOA account is a valid and active account.
+Add validation to target address
+
+```solidity
+require(0 != address(target).code.length)
+```

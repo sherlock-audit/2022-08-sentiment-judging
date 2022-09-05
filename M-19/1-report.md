@@ -1,21 +1,19 @@
 oyc_109
-# Chainlink oracle aggregator data is insufficiently validated
+# No Transfer Ownership Pattern
 
 ## Summary
 
-https://github.com/sherlock-audit/2022-08-sentiment-andyfeili/blob/96338b720493bc6dcbfa8ed24b75af53adc7900d/oracle/src/chainlink/ChainlinkOracle.sol#L49-L73
+https://github.com/sherlock-audit/2022-08-sentiment-andyfeili/blob/96338b720493bc6dcbfa8ed24b75af53adc7900d/oracle/src/utils/Ownable.sol#L21-L25
 
 ## Vulnerability Detail
 
-The function getPrice() and getEthPrice() fetches the latestRoundData() from a Chainlink oracle feed. However, neither round completeness or the quoted timestamp are checked to ensure that the reported price is not stale.
+In `Ownable.sol` the `transferOwnership()` function does not use a two step transfer of ownership pattern.
+
+The current owership transfer process involves the current owner calling `transferOwnership()`.
+This function checks the new address is not the zero address and proceeds to write the new address into the `admin` state variable.
+
+If the nominated EOA account is not a valid account, it is entirely possible the owner may accidentally transfer ownership to an uncontrolled account, breaking all functions which require the `adminOnly()` modifier. 
 
 ## Recommendation
 
-Add additional validation to check if the price is stale and round is complete
-
-eg.
-```solidity
- (uint80 roundID, int256 answer, , uint256 updatedAt, uint80 answeredInRound) = feed.latestRoundData();
-require(answeredInRound >= roundID, "ChainLink: Stale price");
-require(updatedAt != 0, "ChainLink: Round not complete");
-```
+Implement a two step process where the owner nominates an account and the nominated account needs to call an acceptOwnership() function for the transfer to fully succeed. This ensures the nominated EOA account is a valid and active account.

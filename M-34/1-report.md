@@ -1,25 +1,28 @@
-Avci
-# Decimals overflow can happen in getprice function
+vali_dyor
+# Native tokens can be locked forever in the contract LEther
 
 ## Summary
-tokens with decimals higher than 18 will always revert.
+Native tokens can be locked forever in the contract LEther.
 
 ## Vulnerability Detail
-L55 will revert when token has higher than 18 decimals.
-
-
+The contract LEther allows users to deposit their native tokens and get in exchange shares. To do so, they should use the function depositEth().
+However, there is also a function receive() that accepts native tokens. Due to the purpose of the contract LEther, users could be misled and use receive() instead of depositETH(). As it is not possible to withdraw native tokens from the contract LEther, funds would be locked forever.
 
 ## Impact
-This will cause inabilities for the Getprice function 
 
+Funds of misled users (native tokens) can be locked forever in the contract LEther.
 
 ## Code Snippet
-https://github.com/sentimentxyz/oracle/blob/59b26a3d8c295208437aad36c470386c9729a4bc/src/uniswap/UniV3TWAPOracle.sol#L55
+
+https://github.com/sherlock-audit/2022-08-sentiment-validydy/blob/2123357e2a9866bd62d8fe731b222f917a062d59/protocol/src/tokens/LEther.sol#L55
+
 ## Tool used
 
 Manual Review
 
 ## Recommendation
-Consider modifying how GetPrice func to could handle tokens with higher than 18 decimals.
 
-
+Three ideas:
+- remove the function receive() if it is not used.
+- or add an error "DirectNativeTransfersNotAllowed".
+- or add a function withdrawNativeTokens(), that can be called only by an admin address.

@@ -1,80 +1,50 @@
 ladboy233
-# The chainlink oracle data to determine the collateral worth may be outdated because a invalid timestamp is used to check if the oracle data is up-to-date. 
+# Oracle Consideration: Curve price oracle can return invalid price data.
 
 ## Summary
 
-The chainlink oracle data to determine the collateral worth may be outdated because a invalid timestamp is used to check if the oracle data is up-to-date in ArbiChainlinkOracle.sol.
+the curve oracle in 
 
+``` 
+ Stable2CurveOracle.sol
+```
+
+the oracle data can be rounded to 0 or return invalid data.
 
 ## Vulnerability Detail
 
-in ArbiChainlinkOracle.sol
+In Stable2CurveOracle.sol
 
-the function getPrice is implemented to make sure we get the underlying token worth when calculating how much the collateral is worth.
+the getPrice is implemented as shown below.
 
 ```
-    /// @inheritdoc ChainlinkOracle
-    function getPrice(address token) external view override returns (uint) {
-        if (!isSequencerActive()) revert Errors.L2SequencerUnavailable();
-
-        (, int answer,,,) =
-            feed[token].latestRoundData();
-
-        if (answer < 0)
-            revert Errors.NegativePrice(token, address(feed[token]));
-
-        return (
-            (uint(answer)*1e18)/getEthPrice()
+    /// @inheritdoc IOracle
+    function getPrice(address token) external view returns (uint) {
+        uint price0 = oracleFacade.getPrice(ICurvePool(token).coins(0));
+        uint price1 = oracleFacade.getPrice(ICurvePool(token).coins(1));
+        return ((price0 < price1) ? price0 : price1).mulWadDown(
+            ICurvePool(token).get_virtual_price()
         );
     }
 ```
 
-note we check if the oracle data is up-to-date in the
+we get price0 and price1 and use whatever the small number is and divde by virtual price.
+
+When price0 and price1 has a huge price difference (when the curve pool in very imbalanced), the above approach can report undervalued oracle data.
+
+Or if both price0 and price1 is smaller than the virtual price,
+
+because of the division logic
 
 ```
-    function isSequencerActive() internal view returns (bool) {
-        (, int256 answer, uint256 startedAt,,) = sequencer.latestRoundData();
-        if (block.timestamp - startedAt <= GRACE_PERIOD_TIME || answer == 1)
-            return false;
-        return true;
-    }
+ ((price0 < price1) ? price0 : price1).mulWadDown(ICurvePool(token).get_virtual_price())
 ```
 
-according to the chainlink oracle documentation
-
-https://docs.chain.link/docs/price-feeds-api-reference/#latestrounddata
-
-the lastestRoundData returns
-
-```
-roundId: The round ID.
-answer: The price.
-startedAt: Timestamp of when the round started.
-updatedAt: Timestamp of when the round was updated.
-answeredInRound: The round ID of the round in which the answer was computed.
-```
-
-the current implementation use the startedAt timestamp instead of updatedAt to check if the oracle is valid.
-
-In this case when the oracle data is lagging, it is possible that we have the huge time difference between the startedAt and updatedAt timestamp.
-
-Also, the grace period is 1 hour. which is very long because the crypto market prices can change drastically in a volatile period.  So the oracle data from an hour ago may not reflect the current market price.
-
-```
-    /// @notice L2 Sequencer grace period
-    uint256 private constant GRACE_PERIOD_TIME = 3600;
-```
-
+the oracle data would be rounded to 0.
 
 ## Impact
 
-```
-  if (block.timestamp - startedAt <= GRACE_PERIOD_TIME || answer == 1)
-            return false;
-```
-
-
-If the oracle is lagging, the logic above is not capable to invalidating outdated oracle data because the use of startedAt and a long grace period. then the function _valueIn can get the invalid or lagging oracle and determine the wrong number of debt or callateral worth. User may not able to deposit or repay to manage their position or malicious liquidators can liquidated user's account balance.
+If the oracle data is invalid because of imbalanced token pool or very small price0 / price1, then the function _valueIn can get the invalid or lagging oracle and determine the wrong number of debt or callateral worth. User may not able to deposit or repay to manage their position or malicious liquidators can liquidated user's account balance.
 
 ```
     function _valueInWei(address token, uint amt)
@@ -90,6 +60,8 @@ If the oracle is lagging, the logic above is not capable to invalidating outdate
     }
 ```
 
+## Code Snippet
+
 ## Tool used
 
 Manual Review
@@ -98,20 +70,12 @@ Yes
 
 ## Recommendation
 
-We recomment the project to use updatedAt timestamp and shorten the grace period to make sure the oracle data is up to date. 
+To avoid price manipulation, using the virtual price would be sufficient,
 
-Fix:
-
-```
-    /// @notice L2 Sequencer grace period
-    uint256 private constant GRACE_PERIOD_TIME = 500;
-```
+https://news.curve.fi/chainlink-oracles-and-curve-pools/
 
 ```
-    function isSequencerActive() internal view returns (bool) {
-        (, int256 answer,, updatedAt,) = sequencer.latestRoundData();
-        if (block.timestamp - updatedAt <= GRACE_PERIOD_TIME)
-            return false;
-        return true;
+    function getPrice(address token) external view returns (uint) {
+        return  ICurvePool(token).get_virtual_price();
     }
 ```

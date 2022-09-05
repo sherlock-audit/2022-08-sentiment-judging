@@ -1,28 +1,21 @@
-vali_dyor
-# Native tokens can be locked forever in the contract LEther
+Lambda
+# LToken: Borrow rate manipulation possible
 
 ## Summary
-Native tokens can be locked forever in the contract LEther.
+There are situations where it is possible to manipulate the utilization in order to reduce the accrued interest.
 
 ## Vulnerability Detail
-The contract LEther allows users to deposit their native tokens and get in exchange shares. To do so, they should use the function depositEth().
-However, there is also a function receive() that accepts native tokens. Due to the purpose of the contract LEther, users could be misled and use receive() instead of depositETH(). As it is not possible to withdraw native tokens from the contract LEther, funds would be locked forever.
+`getRateFactor()` passes `asset.balanceOf(address(this))` to the calculation of the borrow rate, which uses the value for the utilization calculation. Someone who has borrowed a lot (and therefore wants that the interest stays low), can increase this value before the interest rate accrual to keep the utilization rate low. While every call to `deposit` calls `updateState()` (which makes this attack not possible), it is possible to transfers assets into the contract before the call to `updateState()`. The assets will be lost, but it can still be beneficial if `updateState()` was not called in a long time (meaning that the reduction in accrued interest is large).
 
 ## Impact
-
-Funds of misled users (native tokens) can be locked forever in the contract LEther.
+Imagine the extreme case where Bob is the only borrower and the interest rate was not accrued for one year. Because utilization is very low, the accrued interest would be very high. Bob calculates that it is better for him to first transfer some assets to the LToken contract (that will be locked up forever) and then call `updateState()`. This results in a loss of interest for the borrowers.
 
 ## Code Snippet
-
-https://github.com/sherlock-audit/2022-08-sentiment-validydy/blob/2123357e2a9866bd62d8fe731b222f917a062d59/protocol/src/tokens/LEther.sol#L55
+https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/protocol/src/tokens/LToken.sol#L223
 
 ## Tool used
 
 Manual Review
 
 ## Recommendation
-
-Three ideas:
-- remove the function receive() if it is not used.
-- or add an error "DirectNativeTransfersNotAllowed".
-- or add a function withdrawNativeTokens(), that can be called only by an admin address.
+Track the deposited assets in `ERC4626`, use that value instead of the balance.

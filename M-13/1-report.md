@@ -1,77 +1,86 @@
 ladboy233
-# any amount of withdraw limit in AccountManager.sol is allowed if the account has no debt.
+# Potential Multichain signature replay in token approval
 
 ## Summary
 
-any amount of withdraw limit in AccountManager.sol is allowed if the account has no debt.
+Because we are not using chain id to verify the signature in permit funciton in ERC20.sol, signature can be reused in another blockchain to replay the transaction.
 
 ## Vulnerability Detail
 
-when we wtithdraw fund, we call the function in the accountManager.sol
+Let's look into the permit function in ERC20.sol
 
 ```
-    function isWithdrawAllowed(
-        address account,
-        address token,
-        uint amt
-    )
-        external
-        view
-        returns (bool)
-    {
-        if (IAccount(account).hasNoDebt()) return true;
-        return _isAccountHealthy(
-            _getBalance(account) - _valueInWei(token, amt),
-            _getBorrows(account)
-        );
+    function permit(
+        address owner,
+        address spender,
+        uint256 value,
+        uint256 deadline,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) public virtual {
+        require(deadline >= block.timestamp, "PERMIT_DEADLINE_EXPIRED");
+
+        // Unchecked because the only math done is incrementing
+        // the owner's nonce which cannot realistically overflow.
+        unchecked {
+            address recoveredAddress = ecrecover(
+                keccak256(
+                    abi.encodePacked(
+                        "\x19\x01",
+                        DOMAIN_SEPARATOR(),
+                        keccak256(
+                            abi.encode(
+                                keccak256(
+                                    "Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)"
+                                ),
+                                owner,
+                                spender,
+                                value,
+                                nonces[owner]++,
+                                deadline
+                            )
+                        )
+                    )
+                ),
+                v,
+                r,
+                s
+            );
+
+            require(recoveredAddress != address(0) && recoveredAddress == owner, "INVALID_SIGNER");
+
+            allowance[recoveredAddress][spender] = value;
+        }
+
+        emit Approval(owner, spender, value);
     }
 ```
 
-note if the account has no debt, the isWithdrawAllowed is always return true.
+we use the field owner, spender, value, bounces and deadline to verify the signature.
 
-```
-   function hasNoDebt() external view returns (bool) {
-        return borrows.length == 0;
-    }
-```
+we are missing the chain Id here.
 
-so suppose the account owner deposit 1 ETH, 
+## Impact
 
-and we call 
+because we are not using the chain id to verify the signature, a user can take the signature from one blockchain and replay the transaction using the same signature in another blockchain to get the token approval.
 
-```
- riskEngine.isWithdrawAllowed(account, address(0), 10)
-```
-
-the user certainly cannot withdraw 10 ETH, but the function would return True if it has no debt.
+## Code Snippet
 
 ## Tool used
-
-Foundry
 
 Manual Review
 
 ## Recommendation
 
-We command check account balance in the funtion isWithdrawAllowed
+we recommand add chain id to verify the signature.
 
 ```
-    function isWithdrawAllowed(
-        address account,
-        address token,
-        uint amt
-    )
-        external
-        view
-        returns (bool)
-    {   
-        if(amt > account.balance) return false;
-        if (IAccount(account).hasNoDebt()) return true;
-        return _isAccountHealthy(
-            _getBalance(account) - _valueInWei(token, amt),
-            _getBorrows(account)
-        );
+function getChainID() internal view returns (uint256) {
+    uint256 id;
+    assembly {
+        id := chainid()
     }
+    return id;
+}
 ```
-
-
