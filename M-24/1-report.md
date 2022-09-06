@@ -1,24 +1,21 @@
-Lambda
-# ERC20 tokens with multiple entrypoints can be doublecounted
+oyc_109
+# Chainlink oracle aggregator data is insufficiently validated
 
 ## Summary
-When an ERC20 token has multiple entrypoints, the balance will be counted two times.
+
+https://github.com/sherlock-audit/2022-08-sentiment-andyfeili/blob/96338b720493bc6dcbfa8ed24b75af53adc7900d/oracle/src/chainlink/ChainlinkOracle.sol#L49-L73
 
 ## Vulnerability Detail
-Some ERC20 tokens have multiple entrypoints, see e.g. here, how this affected Compound: https://medium.com/chainsecurity/trueusd-compound-vulnerability-bc5b696d29e2
 
-In such cases, both addresses could potentially be added to the assets of an account, meaning that the balance of this token would be counted two times in `RiskEngine._getBalance`.
-## Impact
-When both entrypoints are whitelisted, the balance of this token will be counted two times.
-
-## Code Snippet
-https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/protocol/src/core/RiskEngine.sol#L157
-
-## Tool used
-
-Manual Review
+The function getPrice() and getEthPrice() fetches the latestRoundData() from a Chainlink oracle feed. However, neither round completeness or the quoted timestamp are checked to ensure that the reported price is not stale.
 
 ## Recommendation
-Never whitelist two entrypoints of the same ERC20 token and fix all issues (see other issues) where the added tokens are not validated / the whitelist can be circumvented.
 
-**Note**: This is more an operational issue, so I could understand if it were out-of-scope. I just wanted to make sure that you are aware of this risk.
+Add additional validation to check if the price is stale and round is complete
+
+eg.
+```solidity
+ (uint80 roundID, int256 answer, , uint256 updatedAt, uint80 answeredInRound) = feed.latestRoundData();
+require(answeredInRound >= roundID, "ChainLink: Stale price");
+require(updatedAt != 0, "ChainLink: Round not complete");
+```

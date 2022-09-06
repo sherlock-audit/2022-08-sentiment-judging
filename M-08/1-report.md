@@ -1,38 +1,41 @@
 JohnSmith
-# Can not create LToken vaults with assets that do not conform to `IERC20Metadata`
+# ERC4626 Oracle may return incorrect price
 
-https://github.com/sentimentxyz/protocol/blob/4e45871e4540df0f189f6c89deb8d34f24930120/src/tokens/utils/ERC4626.sol#L41
-## [M] Can not create LToken vaults with assets that do not conform to `IERC20Metadata`
-Some ERC20 tokens do not conform to `IERC20Metadata`, because it is OPTIONAL to do so, and as result call to `decimals()` may result in revert.
+https://github.com/sentimentxyz/oracle/blob/59b26a3d8c295208437aad36c470386c9729a4bc/src/erc4626/ERC4626Oracle.sol#L35-L43
+## [M] ERC4626 Oracle may return incorrect price
+### Problem
+`decimals()` of underlying asset of ERC4626 and vault's `decimals()` may have different values
+as result price calculated incorrectly.
 ### Proof of Concept
 ```solidity
-protocol/src/tokens/utils/ERC4626.sol
-35:     function initERC4626(
-36:         ERC20 _asset,
-37:         string memory _name,
-38:         string memory _symbol
-39:     ) internal {
-40:         asset = _asset;
-41:         initERC20(_name, _symbol, asset.decimals()); //@audit asset.decimals() may revert
-42:     }
+oracle/src/erc4626/ERC4626Oracle.sol
+35:     function getPrice(address token) external view returns (uint) {
+36:         uint decimals = IERC4626(token).decimals();
+37:         return IERC4626(token).previewRedeem(
+38:             10 ** decimals
+39:         ).mulDivDown(
+40:             oracleFacade.getPrice(IERC4626(token).asset()),
+41:             10 ** decimals  //@audit decimals of asset may be not equal to vault decimals
+42:         );
+43:     }
 ```
+we get price Per Share `previewRedeem(10**shareTokenDecimals)`
+and then calcultaing price `pricePerShare * assetPriceInETH / 10**shareTokenDecimals`
+if `shareTokenDecimals` is not equal to asset decimals then we get something not useful
 ### Mitigation
-We can mitigate this by doing something like OpenZeppelin did:
-https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/token/ERC20/extensions/ERC4626.sol#L36-L41
+Denominator should be underlying asset decimals
 ```diff
-function initERC4626(
-        ERC20 _asset,
-        string memory _name,
-        string memory _symbol
-    ) internal {
-        asset = _asset;
--       initERC20(_name, _symbol, asset.decimals());
-+	uint8 decimals_;
-+	try IERC20Metadata(address(asset_)).decimals() returns (uint8 value) {
-+	decimals_ = value;
-+	} catch {
-+		decimals_ = 18;
-+	}
-+	initERC20(_name, _symbol, decimals_);
+function getPrice(address token) external view returns (uint) {
+        uint decimals = IERC4626(token).decimals();
++	uint assetDecimals = (IERC4626(token).asset()).decimals();
+        return IERC4626(token).previewRedeem(
+            10 ** decimals
+        ).mulDivDown(
+            oracleFacade.getPrice(IERC4626(token).asset()),
+-            10 ** decimals
++	     10 ** assetDecimals
+        );
     }
 ```
+Reminder how you did it correctly in YTokenOracle:
+https://github.com/sentimentxyz/oracle/blob/59b26a3d8c295208437aad36c470386c9729a4bc/src/yearn/YTokenOracle.sol#L38-L43

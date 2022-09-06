@@ -1,53 +1,61 @@
 JohnSmith
-# First user can set arbitrary price, which may prevent some users to deposit
+# Oracle data feed is insufficiently validated
 
-## [M] First user can set arbitrary price, which may prevent some users to deposit
+https://github.com/sentimentxyz/oracle/blob/59b26a3d8c295208437aad36c470386c9729a4bc/src/chainlink/ArbiChainlinkOracle.sol#L47-L59
+https://github.com/sentimentxyz/oracle/blob/59b26a3d8c295208437aad36c470386c9729a4bc/src/chainlink/ChainlinkOracle.sol#L49-L73
+## [M] Oracle data feed is insufficiently validated
 ### Problem
-First user can set share price by sending tokens to the system externally, price can be very high. As result a lot of users will not be able to deposit.
-And borrowers will have smaller amount to borrow and higher interest rate to pay, because amount of underlying asset is smaller, because less amount of people are able to deposit.
-
+Oracle data feed is insufficiently validated. There is no check for stale price and round completeness.
+Price can be stale and can lead to wrong prices returned
 ### Proof of Concept
 ```solidity
-pragma solidity 0.8.15;
+oracle/src/chainlink/ArbiChainlinkOracle.sol
+47:     function getPrice(address token) external view override returns (uint) {
+48:         if (!isSequencerActive()) revert Errors.L2SequencerUnavailable();
+49: 
+50:         (, int answer,,,) =
+51:             feed[token].latestRoundData();
+52: 
+53:         if (answer < 0)
+54:             revert Errors.NegativePrice(token, address(feed[token]));
+55: 
+56:         return (
+57:             (uint(answer)*1e18)/getEthPrice()
+58:         );
+59:     }
+```
 
-import {TestBase} from "../utils/TestBase.sol";
-import "forge-std/console.sol";
+```solidity
+oracle/src/chainlink/ChainlinkOracle.sol
+49:     function getPrice(address token) external view virtual returns (uint) {
+50:         (, int answer,,,) =
+51:             feed[token].latestRoundData();
+52: 
+53:         if (answer < 0)
+54:             revert Errors.NegativePrice(token, address(feed[token]));
+55: 
+56:         return (
+57:             (uint(answer)*1e18)/getEthPrice()
+58:         );
+59:     }
 
-contract ProtocolTest is TestBase {
-    address public alice = cheats.addr(1);
-    address public bob = cheats.addr(2);
-
-    function setUp() public {
-        setupContracts();
-    }
-
-    function testSharePriceManipulation() public{
-        erc20.mint(address(alice), 1000 ether);
-        erc20.mint(address(bob), 1000 ether);
-        cheats.prank(alice);
-        erc20.approve(address(lErc20), type(uint256).max);
-        cheats.prank(bob);
-        erc20.approve(address(lErc20), type(uint256).max);
-
-        cheats.startPrank(alice);
-        lErc20.deposit(1, alice); // 1 share costs 1 wei now
-        assertEq(lErc20.previewRedeem(1), 1);
-
-        erc20.transfer(address(lErc20), 100 ether); // 1 share costs 100 ether + 1 wei now
-        cheats.stopPrank();
-
-        assertEq(lErc20.previewDeposit(80 ether), 0);
-        assertEq(lErc20.previewDeposit(100 ether + 1), 1);
-
-        //bob cannot deposit below share price which can be very expensive
-        cheats.expectRevert("ZERO_SHARES");
-        cheats.prank(bob);
-        lErc20.deposit(80 ether, bob);
-    }
+65:     function getEthPrice() internal view returns (uint) {
+66:         (, int answer,,,) =
+67:             ethUsdPriceFeed.latestRoundData();
+68: 
+69:         if (answer < 0)
+70:             revert Errors.NegativePrice(address(0), address(ethUsdPriceFeed));
+71: 
+72:         return uint(answer);
+73:     }
 ```
 
 ### Mitigation
-Force users to deposit at least some amount in the LToken vault .
-That way the amount the attacker will need to ERC20.transfer to the system will be at least X * 1e18 instead of X which is unrealistic.
-An alternative is to require only the first depositor to freeze big enough initial amount of liquidity. This approach has been used long enough by various projects, for example in Uniswap V2
+```solidity
+(uint80 roundID, int answer, uint startedAt, uint timeStamp, uint80 answeredInRound) = priceFeed.latestRoundData();
 
+if (answer <= 0)revert Errors.ChainlinkInvalidPrice();
+if (answeredInRound < roundID) revert Errors.ChainlinkStalePrice();
+if (timestamp == 0 ) revert Errors.ChainlinkRoundNotComplete();
+
+```

@@ -1,41 +1,38 @@
-defsec
-# Should check return data from chainlink aggregators
+JohnSmith
+# Can not create LToken vaults with assets that do not conform to `IERC20Metadata`
 
-## Summary
-
-The external Chainlink oracle, which provides index price information to the system, introduces risk inherent to any dependency on third-party data sources. For example, the oracle could fall behind or otherwise fail to be maintained, resulting in outdated data being fed to protocol.
-
-## Severity
-Medium
-
-## Vulnerability Detail
-
-The getPrice function in the contract ChainlinkOracle.sol fetches the asset price from a Chainlink aggregator using the latestRoundData function. However, there are no checks on roundID nor timeStamp, resulting in stale prices. The oracle wrapper calls out to a chainlink oracle receiving the latestRoundData(). It then checks freshness by verifying that the answer is indeed for the last known round. The returned updatedAt timestamp is not checked.
-
-## Impact
-
-Stale prices could put funds at risk. According to Chainlink's documentation, This function does not error if no answer has been reached but returns 0, causing an incorrect price fed to the PriceOracle. The external Chainlink oracle, which provides index price information to the system, introduces risk inherent to any dependency on third-party data sources. For example, the oracle could fall behind or otherwise fail to be maintained, resulting in outdated data being fed to protocol
-
-## Code Snippet
-
-[ChainlinkOracle.sol#L67](https://github.com/sherlock-audit/2022-08-sentiment-defsec/blob/main/oracle/src/chainlink/ChainlinkOracle.sol#L67)
-
-## Tool used
-Manual Review
-
-## Recommendation
-
-Consider to add checks on the return data with proper revert messages if the price is stale or the round is incomplete, for example:
-
+https://github.com/sentimentxyz/protocol/blob/4e45871e4540df0f189f6c89deb8d34f24930120/src/tokens/utils/ERC4626.sol#L41
+## [M] Can not create LToken vaults with assets that do not conform to `IERC20Metadata`
+Some ERC20 tokens do not conform to `IERC20Metadata`, because it is OPTIONAL to do so, and as result call to `decimals()` may result in revert.
+### Proof of Concept
 ```solidity
-(uint80 roundID, int256 price, , uint256 timeStamp, uint80 answeredInRound) = ETH_CHAINLINK.latestRoundData();
-require(price > 0, "Chainlink price <= 0"); 
-require(answeredInRound >= roundID, "...");
-require(timeStamp != 0, "...");
+protocol/src/tokens/utils/ERC4626.sol
+35:     function initERC4626(
+36:         ERC20 _asset,
+37:         string memory _name,
+38:         string memory _symbol
+39:     ) internal {
+40:         asset = _asset;
+41:         initERC20(_name, _symbol, asset.decimals()); //@audit asset.decimals() may revert
+42:     }
 ```
-
-## Team  
--
-
-## Sherlock  
-- 
+### Mitigation
+We can mitigate this by doing something like OpenZeppelin did:
+https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/token/ERC20/extensions/ERC4626.sol#L36-L41
+```diff
+function initERC4626(
+        ERC20 _asset,
+        string memory _name,
+        string memory _symbol
+    ) internal {
+        asset = _asset;
+-       initERC20(_name, _symbol, asset.decimals());
++	uint8 decimals_;
++	try IERC20Metadata(address(asset_)).decimals() returns (uint8 value) {
++	decimals_ = value;
++	} catch {
++		decimals_ = 18;
++	}
++	initERC20(_name, _symbol, decimals_);
+    }
+```

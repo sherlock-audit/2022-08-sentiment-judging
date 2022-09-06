@@ -1,24 +1,22 @@
 Lambda
-# ChainlinkOracle: Might return stale values from previous round
+# AccountManager: Fee-On-Transfer tokens not supported
 
 ## Summary
-The `roundId` in `ChainlinkOracle` is not validated.
+Fee-on-transfer tokens lead to problems in `AccountManager`.
 
 ## Vulnerability Detail
-According to the [Chainlink Docs](https://docs.chain.link/docs/historical-price-data/), "You can check answeredInRound against the current roundId. If answeredInRound is less than roundId, the answer is being carried over. If answeredInRound is equal to roundId, then the answer is fresh."
-However, this is not done.
-
-See also https://github.com/code-423n4/2022-04-backd-findings/issues/17 for a discussion of the issue.
+`AccountManager` assumes when liquidating / repaying debt (see code snippets) that the transferred amount equals to the received amount, which is not the case for fee-on-transfer tokens.
 
 ## Impact
-The Oracle might return stale prices. This can be exploited by an attacker that buys the token (that has now a lower price), uses it as collateral, and takes out loans. His real health ratio would be below 1, but this is not detected because of the stale prices.
+When a fee-on-transfer token is used, the debt is reduced by the whole amount, although only part of it is actually transferred to the `LToken`. This destroys the accounting of the `LToken` and is bad for the token holders.
 
 ## Code Snippet
-https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/oracle/src/chainlink/ChainlinkOracle.sol#L66
+https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/protocol/src/core/AccountManager.sol#L380
+https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/protocol/src/core/AccountManager.sol#L236
 
 ## Tool used
 
 Manual Review
 
 ## Recommendation
-Check that `answeredInRound >= roundID`.
+The actual amount that was transferred could be checked. However, not supporting fee-on-transfer tokens is also completely fine in my opinion. Maybe that is already intended, but I did not find anything and wanted to make sure that you are aware of the issues with these tokens.

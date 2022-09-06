@@ -1,22 +1,22 @@
 JohnSmith
-# Interest is not collected until borrower choses to
+# Denial of Service by well funded first user
 
-https://github.com/sentimentxyz/protocol/blob/main/src/tokens/LToken.sol#L153
-## [M] Interest is not collected until borrower choses to
+## [M] Denial of Service by well funded first user
 ### Problem
-When LToken lends its underlying asset it does not have means to collect it until borrower decides to repay or gets liquidated.
-If borrower has a lot of collateral, he can chose not to repay for any amount of time. 
-LToken only increases record of how much borrower is owed, but interest is never paid until liquidation or repay.
-Lenders may choose to withdraw available for LToken underlying asset and will be available to get only amount of asset that vault actally owns, so late withrawers may end up in a situation when vault does not own any underlying asset, but only has `borrows` record, which will be rapaid god knows when, maybe in years time.
+First user can manipulate share price by sending tokens to the system externally.
+They can setup a front-running got which will deposit higher amount than legit users, preventing them to buy a single share.
 ### Proof of Concept
-- Alice deposits to LToken vault 100 ETH worth of some asset
-- Bob's account has 1k ETH  collateral 
-- Bob borrows 50 ETH
-- LToken vault has only 50 ETH worth of underlying asset
-- Alice can withdraw only 50 ETH OR 
-- Charlie deposits 50 ETH
-- Alice withdraws 100 ETH
-- Charlie can't withdraw anything, not even interest accrued, until Bob choses to repay or get's liquidated, which may take years.
-I guess the LToken vault becomes temporarily insolvent 
+- Alice buys first share for 1 wei. Price of 1 share becomes 1 wei;
+- Alice runs a front-running bot, which reads mempool;
+- Bob deposits arbitrary amount, i.e. 100 ether;
+- Alice's bot sends transaction with higher fee to ERC.transfer(address,uint) to LToken vault 100 ether or more
+- Share price becomes 100 ether + 1wei or more;
+- Bob's transaction reverts because his amount sent is not enough to buy a single share;
+- Alice or her bot then can redeem assets;
+- As result nobody can deposit, and nothing to borrow;
+
+When Alice pays for gas, you pay for reputation damage.
 ### Mitigation
-Make it possible to collect some actual value from Accounts after some time intervals.
+- Use Flashbots to avoid mempool.
+- Force users to deposit at least some amount in the LToken vault (Uniswap forces users to pay at least 1e18).
+That way the amount the attacker will need to ERC20.transfer to the system will be at least X * 1e18 instead of X which is unrealistic.

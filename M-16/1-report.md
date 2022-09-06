@@ -1,64 +1,24 @@
 ladboy233
-# Oracle Consideration: Curve price oracle can return invalid price data.
+# Proxy initialization is subject to front running.
 
 ## Summary
 
-the curve oracle in 
+The protocol use proxy pattern so it is requested that the function
 
-``` 
- Stable2CurveOracle.sol
+```
+ function init()
 ```
 
-the oracle data can be rounded to 0 or return invalid data.
+is properly called after the deployment, otherwise, malicious user can call the init before the project, 
+which makes the deployed smart contract not usable.
 
 ## Vulnerability Detail
 
-In Stable2CurveOracle.sol
-
-the getPrice is implemented as shown below.
-
-```
-    /// @inheritdoc IOracle
-    function getPrice(address token) external view returns (uint) {
-        uint price0 = oracleFacade.getPrice(ICurvePool(token).coins(0));
-        uint price1 = oracleFacade.getPrice(ICurvePool(token).coins(1));
-        return ((price0 < price1) ? price0 : price1).mulWadDown(
-            ICurvePool(token).get_virtual_price()
-        );
-    }
-```
-
-we get price0 and price1 and use whatever the small number is and divde by virtual price.
-
-When price0 and price1 has a huge price difference (when the curve pool in very imbalanced), the above approach can report undervalued oracle data.
-
-Or if both price0 and price1 is smaller than the virtual price,
-
-because of the division logic
-
-```
- ((price0 < price1) ? price0 : price1).mulWadDown(ICurvePool(token).get_virtual_price())
-```
-
-the oracle data would be rounded to 0.
+a proxy can be upgraded and initialized by a malicious front running if more than one transaction is used to upgrade or deploy.
 
 ## Impact
 
-If the oracle data is invalid because of imbalanced token pool or very small price0 / price1, then the function _valueIn can get the invalid or lagging oracle and determine the wrong number of debt or callateral worth. User may not able to deposit or repay to manage their position or malicious liquidators can liquidated user's account balance.
-
-```
-    function _valueInWei(address token, uint amt)
-        internal
-        view
-        returns (uint)
-    {
-        return oracle.getPrice(token)
-        .mulDivDown(
-            amt,
-            10 ** ((token == address(0)) ? 18 : IERC20(token).decimals())
-        );
-    }
-```
+Waste of deployment gas. malicious smart contract ownership takeover.
 
 ## Code Snippet
 
@@ -66,16 +26,7 @@ If the oracle data is invalid because of imbalanced token pool or very small pri
 
 Manual Review
 
-Yes
-
 ## Recommendation
 
-To avoid price manipulation, using the virtual price would be sufficient,
-
-https://news.curve.fi/chainlink-oracles-and-curve-pools/
-
-```
-    function getPrice(address token) external view returns (uint) {
-        return  ICurvePool(token).get_virtual_price();
-    }
-```
+We recommend adding a function to the proxy that allows the implementation address
+to be modified and then executed a function on the new implementation address to avoid front running.

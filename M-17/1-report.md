@@ -1,117 +1,86 @@
 ladboy233
-# The chainlink oracle data to determine the collateral worth may be outdated because a invalid timestamp is used to check if the oracle data is up-to-date. 
+# Potential Multichain signature replay in token approval
 
 ## Summary
 
-The chainlink oracle data to determine the collateral worth may be outdated because a invalid timestamp is used to check if the oracle data is up-to-date in ArbiChainlinkOracle.sol.
-
+Because we are not using chain id to verify the signature in permit funciton in ERC20.sol, signature can be reused in another blockchain to replay the transaction.
 
 ## Vulnerability Detail
 
-in ArbiChainlinkOracle.sol
-
-the function getPrice is implemented to make sure we get the underlying token worth when calculating how much the collateral is worth.
+Let's look into the permit function in ERC20.sol
 
 ```
-    /// @inheritdoc ChainlinkOracle
-    function getPrice(address token) external view override returns (uint) {
-        if (!isSequencerActive()) revert Errors.L2SequencerUnavailable();
+    function permit(
+        address owner,
+        address spender,
+        uint256 value,
+        uint256 deadline,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) public virtual {
+        require(deadline >= block.timestamp, "PERMIT_DEADLINE_EXPIRED");
 
-        (, int answer,,,) =
-            feed[token].latestRoundData();
+        // Unchecked because the only math done is incrementing
+        // the owner's nonce which cannot realistically overflow.
+        unchecked {
+            address recoveredAddress = ecrecover(
+                keccak256(
+                    abi.encodePacked(
+                        "\x19\x01",
+                        DOMAIN_SEPARATOR(),
+                        keccak256(
+                            abi.encode(
+                                keccak256(
+                                    "Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)"
+                                ),
+                                owner,
+                                spender,
+                                value,
+                                nonces[owner]++,
+                                deadline
+                            )
+                        )
+                    )
+                ),
+                v,
+                r,
+                s
+            );
 
-        if (answer < 0)
-            revert Errors.NegativePrice(token, address(feed[token]));
+            require(recoveredAddress != address(0) && recoveredAddress == owner, "INVALID_SIGNER");
 
-        return (
-            (uint(answer)*1e18)/getEthPrice()
-        );
+            allowance[recoveredAddress][spender] = value;
+        }
+
+        emit Approval(owner, spender, value);
     }
 ```
 
-note we check if the oracle data is up-to-date in the
+we use the field owner, spender, value, bounces and deadline to verify the signature.
 
-```
-    function isSequencerActive() internal view returns (bool) {
-        (, int256 answer, uint256 startedAt,,) = sequencer.latestRoundData();
-        if (block.timestamp - startedAt <= GRACE_PERIOD_TIME || answer == 1)
-            return false;
-        return true;
-    }
-```
-
-according to the chainlink oracle documentation
-
-https://docs.chain.link/docs/price-feeds-api-reference/#latestrounddata
-
-the lastestRoundData returns
-
-```
-roundId: The round ID.
-answer: The price.
-startedAt: Timestamp of when the round started.
-updatedAt: Timestamp of when the round was updated.
-answeredInRound: The round ID of the round in which the answer was computed.
-```
-
-the current implementation use the startedAt timestamp instead of updatedAt to check if the oracle is valid.
-
-In this case when the oracle data is lagging, it is possible that we have the huge time difference between the startedAt and updatedAt timestamp.
-
-Also, the grace period is 1 hour. which is very long because the crypto market prices can change drastically in a volatile period.  So the oracle data from an hour ago may not reflect the current market price.
-
-```
-    /// @notice L2 Sequencer grace period
-    uint256 private constant GRACE_PERIOD_TIME = 3600;
-```
-
+we are missing the chain Id here.
 
 ## Impact
 
-```
-  if (block.timestamp - startedAt <= GRACE_PERIOD_TIME || answer == 1)
-            return false;
-```
+because we are not using the chain id to verify the signature, a user can take the signature from one blockchain and replay the transaction using the same signature in another blockchain to get the token approval.
 
-
-If the oracle is lagging, the logic above is not capable to invalidating outdated oracle data because the use of startedAt and a long grace period. then the function _valueIn can get the invalid or lagging oracle and determine the wrong number of debt or callateral worth. User may not able to deposit or repay to manage their position or malicious liquidators can liquidated user's account balance.
-
-```
-    function _valueInWei(address token, uint amt)
-        internal
-        view
-        returns (uint)
-    {
-        return oracle.getPrice(token)
-        .mulDivDown(
-            amt,
-            10 ** ((token == address(0)) ? 18 : IERC20(token).decimals())
-        );
-    }
-```
+## Code Snippet
 
 ## Tool used
 
 Manual Review
 
-Yes
-
 ## Recommendation
 
-We recomment the project to use updatedAt timestamp and shorten the grace period to make sure the oracle data is up to date. 
-
-Fix:
+we recommand add chain id to verify the signature.
 
 ```
-    /// @notice L2 Sequencer grace period
-    uint256 private constant GRACE_PERIOD_TIME = 500;
-```
-
-```
-    function isSequencerActive() internal view returns (bool) {
-        (, int256 answer,, updatedAt,) = sequencer.latestRoundData();
-        if (block.timestamp - updatedAt <= GRACE_PERIOD_TIME)
-            return false;
-        return true;
+function getChainID() internal view returns (uint256) {
+    uint256 id;
+    assembly {
+        id := chainid()
     }
+    return id;
+}
 ```

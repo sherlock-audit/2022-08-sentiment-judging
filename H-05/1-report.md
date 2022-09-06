@@ -1,24 +1,38 @@
-Lambda
-# Oracle Flashloans attacks to force liquidations possible
+cryptphi
+# AccountManager.liquidate() allows any user to steal any additional token or ETH held in contract 
 
 ## Summary
+Any user who liquidates an account will be transferred all tokens or ETH that were sent directly to the account contract.
 
 ## Vulnerability Detail
-Some of the used oracles can be manipulated with flashloans:
+When a user calls AccountManager.liquidate() , they receive all token assets and ETH held in the account contract which also includes those which were sent directly to the contract so long the account is unhealthy.
 
-- The curve tricrypto pool only has a market cap of $399.3k at the time of writing. Therefore, the WETH price that is directly retrieved from the pool (`pool.price_oracle(1)`) could easily be manipulated with a flashloan.
-- yearns `pricePerShare()` is manipulable by flashloans, which was exploited previously: https://medium.com/cream-finance/post-mortem-exploit-oct-27-507b12bb6f8e
-- Compounds `exchangeRateStored()` directly queries balances and is manipulable (see e.g. the cETH code: https://etherscan.io/token/0x4ddc2d193948926d02f9b1fe9e1daa0718270ed5#code)
+This means a user could possibly target accounts that holds extra ETH and/or tokens and they satisfy the account unhealthy condition. 
 
 ## Impact
-An attacker can use flashloans to force liquidations of users that hold these assets. They will be liquidated, although their health ratio (if properly calculated) would be significantly higher.
+Loss of contract funds
 
 ## Code Snippet
-https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/oracle/src/curve/CurveTriCryptoOracle.sol#L52
+**Account Sweep**
+```
+function sweepTo(address toAddress) external accountManagerOnly {
+        uint assetsLen = assets.length;
+        for(uint i; i < assetsLen; ++i) {
+            assets[i].safeTransfer(
+                toAddress,
+                assets[i].balanceOf(address(this))
+            );
+            hasAsset[assets[i]] = false;
+        }
+        delete assets;
+        toAddress.safeTransferEth(address(this).balance);
+    }
+```
+Above transfers all assets and eth held in the account contract which may not match the total borrows by the account, allowing any user that calls liquidates and pays the token amount to LToken contract, to walk away with some profits in both eth and erc20 token assets.
 
 ## Tool used
 
 Manual Review
 
 ## Recommendation
-Use flashloan-resistant oracles.
+The sweepTo() function's logic should be that which sends the amount of assets liquidated by the user and not all tokens held by account contract.

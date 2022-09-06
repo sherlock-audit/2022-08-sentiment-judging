@@ -1,27 +1,32 @@
-vali_dyor
-# If too much accounts are listed in the Registry, calling view functions could fail by exceeding arbitrary gas limits.
+Lambda
+# CTokenOracle: Wrong price for CEther
 
 ## Summary
-RPC calls could fail if the number of accounts gets too large, which could disrupt the monitoring of health factors and ultimately the liquidation process.
+The value that is returned by `CTokenOracle` for cETH leads to wrong exchange calculations.
 
 ## Vulnerability Detail
-In the contract Registry, two view functions are used to get the list of all accounts: getAllAccounts() and accountsOwnedBy(address user). Other view functions are used for the keys and the listedLTokens, but only the list of accounts could legitimately reach a significant size.
-Even if view functions are gas free, limits can be set by public rpc providers to avoid DoS attacks. For example, calling getAllAccounts() for 25000 accounts consumes 70,576,600 gas (test made using Foundry) which is more than twice the current block limit of Ethereum (30M).
+The exchange rate that is returned by `exchangeRateStored()` should not be multiplied by 1e18, this leads to wrong values.
 
 ## Impact
 
-The impact would be that, once the number of accounts in the contract Registry reaches a given amount, monitoring tools using these two functions may stop to work correctly, impacting a correct visibility over the protocol. For example, a maintainer could have more difficulties to detect and execute liquidation opportunities.
+For instance, at the time of writing, 1 cETH = 0.020067 ETH and `exchangeRateStored` returns 200674139044261374629937592. cETH has 8 decimals (see https://etherscan.io/token/0x4ddc2d193948926d02f9b1fe9e1daa0718270ed5#readContract), but the system would return the following for `_valueInWei(address(cETH), 1e8)`:
+```
+((200674139044261374629937592 * 1e8) * 1e8) / 10 ** IERC20(cETH).decimals() =
+((200674139044261374629937592 * 1e8) * 1e8) / 10 ** 8 =
+~2e34
+```
+Which is completely wrong.
 
 ## Code Snippet
-
-https://github.com/sherlock-audit/2022-08-sentiment-validydy/blob/2123357e2a9866bd62d8fe731b222f917a062d59/protocol/src/core/Registry.sol#L159
-
-https://github.com/sherlock-audit/2022-08-sentiment-validydy/blob/2123357e2a9866bd62d8fe731b222f917a062d59/protocol/src/core/Registry.sol#L176
+https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/oracle/src/compound/CTokenOracle.sol#L63
 
 ## Tool used
 
-Manual Review and Foundry to test the gas used by these functions, after pre-populating the array accounts with 25000 addresses.
+Manual Review
 
 ## Recommendation
-
-As is not a good idea to restrict the max number of accounts, consider using paginated views instead of simply returning the whole list of accounts.
+Replace `getCEtherPrice()` with
+```
+return ICToken(cETHER).exchangeRateStored().divWadDown(1e10);
+```
+Then, the above calculation returns ~2e16, which is correct (1 cETH is currently worth roughly 2e16 wei, i.e. 0.02 ETH).

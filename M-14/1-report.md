@@ -1,77 +1,66 @@
-ladboy233
-# any amount of withdraw limit in AccountManager.sol is allowed if the account has no debt.
+jonatascm
+# Missing verification in `getEthPrice` and `getPrice` could lead to stale/incorrect price
 
 ## Summary
 
-any amount of withdraw limit in AccountManager.sol is allowed if the account has no debt.
+On ChainlinkOracle.sol, there are missing checks to verify if price is stale/incorrect.
 
 ## Vulnerability Detail
 
-when we wtithdraw fund, we call the function in the accountManager.sol
+In `latestRoundData` function there is a need to check `answeredInRound` , `roundID` and `timestamp` to check if the price could be stale.
 
+## Impact
+
+This could lead to incorrect/stale prices that may cause invalid calculation and loss of funds
+
+## Code Snippet
+
+```solidity
+function getPrice(address token) external view virtual returns (uint) {
+    (, int answer,,,) =
+        feed[token].latestRoundData();
+
+    if (answer < 0)
+        revert Errors.NegativePrice(token, address(feed[token]));
+
+    return (
+        (uint(answer)*1e18)/getEthPrice()
+    );
+}
+
+function getEthPrice() internal view returns (uint) {
+  (, int answer,,,) = ethUsdPriceFeed.latestRoundData();
+
+  if (answer < 0)
+    revert Errors.NegativePrice(address(0), address(ethUsdPriceFeed));
+
+  return uint(answer);
+}
 ```
-    function isWithdrawAllowed(
-        address account,
-        address token,
-        uint amt
-    )
-        external
-        view
-        returns (bool)
-    {
-        if (IAccount(account).hasNoDebt()) return true;
-        return _isAccountHealthy(
-            _getBalance(account) - _valueInWei(token, amt),
-            _getBorrows(account)
-        );
-    }
-```
-
-note if the account has no debt, the isWithdrawAllowed is always return true.
-
-```
-   function hasNoDebt() external view returns (bool) {
-        return borrows.length == 0;
-    }
-```
-
-so suppose the account owner deposit 1 ETH, 
-
-and we call 
-
-```
- riskEngine.isWithdrawAllowed(account, address(0), 10)
-```
-
-the user certainly cannot withdraw 10 ETH, but the function would return True if it has no debt.
 
 ## Tool used
-
-Foundry
 
 Manual Review
 
 ## Recommendation
 
-We command check account balance in the funtion isWithdrawAllowed
+The recommendation is to follow the code:
 
+```diff
+function getEthPrice() internal view returns (uint) {
+-  (, int answer,,,) = ethUsdPriceFeed.latestRoundData();
++  (uint80 roundID, int256 answer, , uint256 timestamp, uint80 answeredInRound) =
+     ethUsdPriceFeed.latestRoundData();
+
+  if (answer < 0)
+    revert Errors.NegativePrice(address(0), address(ethUsdPriceFeed));
+
++	if (answeredInRound < roundID) 
++	  revert Errors.StalePrice(address(0), address(ethUsdPriceFeed));
+
++ if(timestamp == 0) 
++    revert Errors.RoundIncomplete(address(0), address(ethUsdPriceFeed));
+
+  return uint(answer);
+}
 ```
-    function isWithdrawAllowed(
-        address account,
-        address token,
-        uint amt
-    )
-        external
-        view
-        returns (bool)
-    {   
-        if(amt > account.balance) return false;
-        if (IAccount(account).hasNoDebt()) return true;
-        return _isAccountHealthy(
-            _getBalance(account) - _valueInWei(token, amt),
-            _getBorrows(account)
-        );
-    }
-```
-
-

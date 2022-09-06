@@ -1,23 +1,33 @@
 Lambda
-# LEther: Flash loan can be used to manipulate borrow rate
+# CTokenOracle: Missing normalization by 10^18
 
 ## Summary
-`LEther` mistakenly does not call `beforeDeposit` before a deposit happens, which can be exploited to reduce interest significantly.
+The prices that are returned by `getCErc20Price` need to be normalized.
 
 ## Vulnerability Detail
-In `depositEth` within `LEther`, `beforeDeposit` which updates the state is not called. Because of that, the utilization can be manipulated within a single transaction. As this is unintended behavior, there are potentially more ways to exploit it (combination of borrowing, depositing, withdrawing, etc...), but one way how it can be exploited to reduce interest significantly is documented below.
+In `getCErc20Price`, there is a multiplication of the CErc20/Erc20 price by the Erc20/ETH price in the end. However, because the Erc20/ETH price is returned with 18 decimals, a division by 1e18 is needed in the end.
 
 ## Impact
-Someone who has borrowed money (and therefore wants to reduce interest) takes out a huge ETH flash loan and deposits the ETH via `depositEth()`. Then, he calls `updateState()` which now uses the significantly increased (W)ETH balance. Therefore, utilization will be almost 0 and almost no interest will be accrued. Afterwards, he calls `redeemEth()` and pays back the flashloan.
-
-Note that this attack is most effective when `updateState()` was not called for a long time. However, it can also be performed multiple times (e.g., front-running all transactions that would update the state) such that interest is never properly accrued.
+The prices are currently wrong.
+Let's take cUSDC (https://etherscan.io/token/0x39aa39c021dfbae8fac545936693ac917d5e7563#readContract) with a current price of ~0.000014 ETH. Currently, `exchangeRateStored()` is 226405222044735 and `getCErc20Price` would return:
+```
+((226405222044735 * 1e8) / 1e6) * oracle.getPrice(address(USDC) = 
+((226405222044735 * 1e8) / 1e6) * 626633162680235 = 
+1.41e31 
+```
 
 ## Code Snippet
-https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/protocol/src/tokens/LEther.sol#L36
+https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/oracle/src/compound/CTokenOracle.sol#L73
 
 ## Tool used
 
 Manual Review
 
 ## Recommendation
-Call `beforeDeposit()` in `depositEth()` (and `beforeWithdraw()` in `redeemEth()`).
+```
+        return cToken.exchangeRateStored()
+        .mulDivDown(1e8 , IERC20(underlying).decimals())
+        .mulWadDown(oracle.getPrice(underlying))
+        .divWadDown(1e18);
+```
+Then, the above example returns 1.41e13, which is correct.

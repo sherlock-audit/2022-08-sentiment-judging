@@ -1,24 +1,77 @@
-oyc_109
-# Failed transfer with low level call won't revert
+ladboy233
+# any amount of withdraw limit in AccountManager.sol is allowed if the account has no debt.
 
 ## Summary
 
-https://github.com/sherlock-audit/2022-08-sentiment-andyfeili/blob/96338b720493bc6dcbfa8ed24b75af53adc7900d/protocol/src/core/Account.sol#L149-L156
+any amount of withdraw limit in AccountManager.sol is allowed if the account has no debt.
 
 ## Vulnerability Detail
 
-An account can call an arbitrary contract using the `exec()` function. The function should return success True if transaction was successful, false otherwise. 
+when we wtithdraw fund, we call the function in the accountManager.sol
 
-However low level calls (call, delegate call and static call) return success if the called contract doesn’t exist (not deployed or destructed). This could result in the call failing, however success will be set to true, which means the call will not revert but fail silently. 
+```
+    function isWithdrawAllowed(
+        address account,
+        address token,
+        uint amt
+    )
+        external
+        view
+        returns (bool)
+    {
+        if (IAccount(account).hasNoDebt()) return true;
+        return _isAccountHealthy(
+            _getBalance(account) - _valueInWei(token, amt),
+            _getBorrows(account)
+        );
+    }
+```
 
-https://github.com/sherlock-audit/2022-08-sentiment-andyfeili/blob/96338b720493bc6dcbfa8ed24b75af53adc7900d/protocol/src/core/AccountManager.sol#L306-L308
+note if the account has no debt, the isWithdrawAllowed is always return true.
 
-Reference: [Solidity Docs](https://docs.soliditylang.org/en/develop/control-structures.html#error-handling-assert-require-revert-and-exceptions)
+```
+   function hasNoDebt() external view returns (bool) {
+        return borrows.length == 0;
+    }
+```
+
+so suppose the account owner deposit 1 ETH, 
+
+and we call 
+
+```
+ riskEngine.isWithdrawAllowed(account, address(0), 10)
+```
+
+the user certainly cannot withdraw 10 ETH, but the function would return True if it has no debt.
+
+## Tool used
+
+Foundry
+
+Manual Review
 
 ## Recommendation
 
-Add validation to target address
+We command check account balance in the funtion isWithdrawAllowed
 
-```solidity
-require(0 != address(target).code.length)
 ```
+    function isWithdrawAllowed(
+        address account,
+        address token,
+        uint amt
+    )
+        external
+        view
+        returns (bool)
+    {   
+        if(amt > account.balance) return false;
+        if (IAccount(account).hasNoDebt()) return true;
+        return _isAccountHealthy(
+            _getBalance(account) - _valueInWei(token, amt),
+            _getBorrows(account)
+        );
+    }
+```
+
+

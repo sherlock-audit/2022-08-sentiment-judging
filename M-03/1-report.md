@@ -1,61 +1,21 @@
 JohnSmith
-# Oracle data feed is insufficiently validated
+# LToken vault is Not Compatible with Fee Tokens
 
-https://github.com/sentimentxyz/oracle/blob/59b26a3d8c295208437aad36c470386c9729a4bc/src/chainlink/ArbiChainlinkOracle.sol#L47-L59
-https://github.com/sentimentxyz/oracle/blob/59b26a3d8c295208437aad36c470386c9729a4bc/src/chainlink/ChainlinkOracle.sol#L49-L73
-## [M] Oracle data feed is insufficiently validated
+## [M] LToken vault is Not Compatible with Fee Tokens
 ### Problem
-Oracle data feed is insufficiently validated. There is no check for stale price and round completeness.
-Price can be stale and can lead to wrong prices returned
+Some ERC20 tokens charge a transaction fee for every transfer (used to encourage staking, add to liquidity pool, pay a fee to contract owner, etc.). If any such token is used when depositing or repaying a debt, the LToken vault will always receive less and contract would lose economic value.
+
 ### Proof of Concept
+Plenty of ERC20 tokens charge a fee for every transfer (e.g. Safemoon and its forks), in which the amount of token received is less than the amount being sent. When a fee token is used as the `asset` in the `LToken` contract, the amount received by the contract would be less than the amount being sent. To be more precise, functions
 ```solidity
-oracle/src/chainlink/ArbiChainlinkOracle.sol
-47:     function getPrice(address token) external view override returns (uint) {
-48:         if (!isSequencerActive()) revert Errors.L2SequencerUnavailable();
-49: 
-50:         (, int answer,,,) =
-51:             feed[token].latestRoundData();
-52: 
-53:         if (answer < 0)
-54:             revert Errors.NegativePrice(token, address(feed[token]));
-55: 
-56:         return (
-57:             (uint(answer)*1e18)/getEthPrice()
-58:         );
-59:     }
+protocol/src/tokens/utils/ERC4626.sol
+48:     function deposit(uint256 assets, address receiver) public virtual returns (uint256 shares) {
+
+62:     function mint(uint256 shares, address receiver) public virtual returns (uint256 assets) {
+
+protocol/src/tokens/LToken.sol
+153:     function collectFrom(address account, uint amt)
 ```
-
-```solidity
-oracle/src/chainlink/ChainlinkOracle.sol
-49:     function getPrice(address token) external view virtual returns (uint) {
-50:         (, int answer,,,) =
-51:             feed[token].latestRoundData();
-52: 
-53:         if (answer < 0)
-54:             revert Errors.NegativePrice(token, address(feed[token]));
-55: 
-56:         return (
-57:             (uint(answer)*1e18)/getEthPrice()
-58:         );
-59:     }
-
-65:     function getEthPrice() internal view returns (uint) {
-66:         (, int answer,,,) =
-67:             ethUsdPriceFeed.latestRoundData();
-68: 
-69:         if (answer < 0)
-70:             revert Errors.NegativePrice(address(0), address(ethUsdPriceFeed));
-71: 
-72:         return uint(answer);
-73:     }
-```
-
-### Mitigation
-```solidity
-(uint80 roundID, int answer, uint startedAt, uint timeStamp, uint80 answeredInRound) = priceFeed.latestRoundData();
-
-if (answer <= 0)revert Errors.ChainlinkInvalidPrice();
-if (answeredInRound < roundID) revert Errors.ChainlinkStalePrice();
-if (timestamp == 0 ) revert Errors.ChainlinkRoundNotComplete();
-
-```
+do not check how amount of tokens received and as result contract will lose economic value.
+###  Mitigation 
+Check amount of tokens received or disallow fee tokens from being used in the vault. 

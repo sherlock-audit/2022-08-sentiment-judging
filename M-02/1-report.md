@@ -1,21 +1,90 @@
-JohnSmith
-# LToken vault is Not Compatible with Fee Tokens
+CRYP70
+# Frontrunning in the Contract's Initialization Function Can Lead to an Array of Vulnerabilities
 
-## [M] LToken vault is Not Compatible with Fee Tokens
-### Problem
-Some ERC20 tokens charge a transaction fee for every transfer (used to encourage staking, add to liquidity pool, pay a fee to contract owner, etc.). If any such token is used when depositing or repaying a debt, the LToken vault will always receive less and contract would lose economic value.
+## Summary
+There exists an issue in the `Account.sol`, `AccountManager.sol` and the `Registry.sol` contracts where front running allows the attacker to cause adverse effects on the contract should they succeed. 
 
-### Proof of Concept
-Plenty of ERC20 tokens charge a fee for every transfer (e.g. Safemoon and its forks), in which the amount of token received is less than the amount being sent. When a fee token is used as the `asset` in the `LToken` contract, the amount received by the contract would be less than the amount being sent. To be more precise, functions
+## Vulnerability Analysis
+Given the `init()` function in the `Registry.sol` contract:
 ```solidity
-protocol/src/tokens/utils/ERC4626.sol
-48:     function deposit(uint256 assets, address receiver) public virtual returns (uint256 shares) {
-
-62:     function mint(uint256 shares, address receiver) public virtual returns (uint256 assets) {
-
-protocol/src/tokens/LToken.sol
-153:     function collectFrom(address account, uint amt)
+    /**
+        @notice Contract Initialization function
+        @dev Can only be invoked once
+    */
+    function init() external {
+        if (initialized) revert Errors.ContractAlreadyInitialized();
+        initialized = true;
+        initOwnable(msg.sender);
+    }
 ```
-do not check how amount of tokens received and as result contract will lose economic value.
-###  Mitigation 
-Check amount of tokens received or disallow fee tokens from being used in the vault. 
+In the above snippet of code, the `init()` function is used to determine ownership of the contract in question (with varying state changes depending on the contract). An attacker can monitor the mempool for a contract deployment which takes a certain amount of time depending on the congestion of transactions waiting to be processed. Should an adversary catch hold of the deployment transaction, they are free to call the `init()` function to gain ownership of the contract.
+
+I have awarded this as a "Medium" in severity because certain conditions must be met in order to execute a successful attack. The attacker should actively be monitoring the mempool for opportunities in order to exploit this attack vector.
+
+## Impact
+The following contracts are affected with the described impact:
+- `Account.sol`:`59`
+	- Attackers can initialize a malicious `accountManager` to manipulate funds or brick the contract.
+- `AccountManager.sol`:`68`
+	- `initPausable()` is called here which may be able to brick the contract if `pause()` was called by an unwanted address.
+- `Registry.sol`:`61`
+	- Complete ownership over the registry and user accounts as the administrator. 
+
+## Proof of Concept
+#### Exploit scenario in the case of `Registry.sol`
+- Alice deploys the `Registry.sol` contract to the blockchain.
+- Eve notices the contract has successfully been deployed and sees a front running opportunity by calling the `init()` function to become the admin user. 
+- Eve is free to use whichever functions in the deployed contract which require an administrative privileges.  
+
+I have included a proof of concept test outlining the above scenario as followed:
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.15;
+
+import {Errors} from "../../utils/Errors.sol";
+import {TestBase} from "../utils/TestBase.sol";
+import {IRegistry} from "../../interface/core/IRegistry.sol";
+import {Registry} from "../../core/Registry.sol";
+
+// Located in protocol/src/test/MyTests/TestFrontRun.sol
+
+contract TestFrontRun is TestBase {
+
+    address alice;
+    address eve;
+
+    function setUp() public {
+
+        alice = cheats.addr(1);
+        eve = cheats.addr(2);
+
+    }
+
+    function testProveFrontRunning() public {
+        
+        cheats.startPrank(alice);
+        // Alice, the rightful owner deploys the registry contract
+        Registry myReg = new Registry();
+        cheats.stopPrank();
+
+        assertEq(address(myReg.admin()), address(0));
+
+        // Eve, a malicious user is monitoring the mempool and can frontrun alice to initialize the contract
+        cheats.startPrank(eve);
+        myReg.init();
+        cheats.stopPrank();
+
+        assertEq(address(myReg.admin()), address(eve));
+
+    }
+
+}
+```
+
+## Tool used
+Manual Review
+
+## Recommendation
+Consider the following remediations to prevent a frontrunning attack on the deployed contracts:
+- Implement access controls in the form of a modifer so only the deployer can call the initialization functions. 
+- Consider moving the initialization operations to a contract constructor for the purpose of executing initialization code on deployment. 

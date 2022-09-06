@@ -1,39 +1,24 @@
-icedpeachtea
-# isSequencerActive() uses startedAt instead of updatedAt
+oyc_109
+# Failed transfer with low level call won't revert
 
 ## Summary
-`isSequencerActive()` determines whether the sequencer is active by checking `startedAt` instead of `updatedAt`.
+
+https://github.com/sherlock-audit/2022-08-sentiment-andyfeili/blob/96338b720493bc6dcbfa8ed24b75af53adc7900d/protocol/src/core/Account.sol#L149-L156
 
 ## Vulnerability Detail
-The `isSequencerActive` function incorrectly uses `startedAt` to determine whether the data reported by Chainlink oracle is within grace period. Instead, it should use `updatedAt` which represents the timestamp of when the round was updated, not the timestamp of when the round started.
 
-## Impact
-`isSequencerActive` will return false even though the data provided by Chainlink oracle is valid and fresh. 
+An account can call an arbitrary contract using the `exec()` function. The function should return success True if transaction was successful, false otherwise. 
 
-## Code Snippet
+However low level calls (call, delegate call and static call) return success if the called contract doesn’t exist (not deployed or destructed). This could result in the call failing, however success will be set to true, which means the call will not revert but fail silently. 
 
-```solidity
-// oracle/src/chainlink/ArbiChainlinkOracle.sol:65
-function isSequencerActive() internal view returns (bool) {
-        (, int256 answer, uint256 startedAt,,) = sequencer.latestRoundData();
-        if (block.timestamp - startedAt <= GRACE_PERIOD_TIME || answer == 1)
-            return false;
-        return true;
-    }
-```
-## Tool used
+https://github.com/sherlock-audit/2022-08-sentiment-andyfeili/blob/96338b720493bc6dcbfa8ed24b75af53adc7900d/protocol/src/core/AccountManager.sol#L306-L308
 
-Manual Review
-https://docs.chain.link/docs/price-feeds-api-reference/
+Reference: [Solidity Docs](https://docs.soliditylang.org/en/develop/control-structures.html#error-handling-assert-require-revert-and-exceptions)
 
 ## Recommendation
-Use `updatedAt` instead.
+
+Add validation to target address
 
 ```solidity
-function isSequencerActive() internal view returns (bool) {
-        (, int256 answer,, uint256 updatedAt,) = sequencer.latestRoundData();
-        if (block.timestamp - updatedAt <= GRACE_PERIOD_TIME || answer == 1)
-            return false;
-        return true;
-    }
+require(0 != address(target).code.length)
 ```

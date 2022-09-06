@@ -1,31 +1,27 @@
 Lambda
-# UniV2LPOracle: Decimals of pair tokens ignored
+# AccountManager: Liquidations not possible when transfer fails
 
 ## Summary
-`UniV2LPOracle` does not take into account how many decimals the reserve tokens have, leading to wrong values.
+When the transfer of one asset fails, liquidations become impossible.
 
 ## Vulnerability Detail
-`getReserves()` returns the tokens in their decimals. Therefore, we have in the calculation (see the comments for the calculations):
-```
-        return FixedPointMathLib.sqrt(
-            r0 //d1 decimals
-            .mulWadDown(r1) //d2 decimals
-            .mulWadDown(oracle.getPrice(IUniswapV2Pair(pair).token0())) //18 decimals
-            .mulWadDown(oracle.getPrice(IUniswapV2Pair(pair).token1())) //18 decimals
-        ) // (d1 + d2 + 36)/2 decimals
-        .mulDivDown(2e27, IUniswapV2Pair(pair).totalSupply()); // (d1 + d2 + 36)/2 + 27 - 18 decimals
-```
-Meaning that the returned value will not have 18 decimals.
+`_liquidate` calls `sweepTo`, which iterates over all assets. When one of those transfers fails, the whole liquidation process therefore fails. There are multiple reasons why a transfer could fail:
+1.) Blocked addresses (e.g., USDC)
+2.) The balance of the asset is 0, but it is still listed under asset. This can be for instance triggered by performing a 0 value Uniswap swap, in which case it is still added to `tokensIn`. Another way to trigger is to call `deposit` with `amt = 0` (this is another issue that should be fixed IMO, in practice the assets of an account should not contain any tokens with zero balance)
+Some tokens revert for zero value transfers (see https://github.com/d-xo/weird-erc20)
+3.) Paused tokens
+4.) Upgradeable tokens that changed the implementation.
 
 ## Impact
-The price that is used for those LP tokens will be way too high, which can be exploited to create debt positions with a health ratio below 1.
+See above, an account cannot be liquidated. In certain conditions, this might even be triggerable by the user. For instance, a user could try to get on the USDC blacklist to avoid liquidations.
 
 ## Code Snippet
-https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/oracle/src/uniswap/UniV2LPOracle.sol#L49
+https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/protocol/src/core/AccountManager.sol#L384
+https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/protocol/src/core/Account.sol#L166
 
 ## Tool used
 
 Manual Review
 
 ## Recommendation
-Normalize (taking into account the decimals of the reserves) to have a result with 18 decimals.
+Catch reversions for the transfer and skip this asset (but it could be kept in the assets list to allow retries later on).

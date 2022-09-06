@@ -1,22 +1,40 @@
-Lambda
-# AccountManager: Fee-On-Transfer tokens not supported
+icedpeachtea
+# Account can be initialized multiple times if _accountManager is address(0)
 
 ## Summary
-Fee-on-transfer tokens lead to problems in `AccountManager`.
+Account's contract `init` function can be reinit multiple times if `_accountManager` is `address(0)`.
 
 ## Vulnerability Detail
-`AccountManager` assumes when liquidating / repaying debt (see code snippets) that the transferred amount equals to the received amount, which is not the case for fee-on-transfer tokens.
+The if statement determines the `accountManager` is not `address(0)`, if yes it determines the contract is already initialized. However, it does not check whether the input `_accountManager` is `address(0)`. If it is, the `init` function can be called twice and other people (such as an attacker) can modify the `_accountManager` to his/her controlled address. 
+
+https://twitter.com/Hacxyk/status/1529389391818510337
 
 ## Impact
-When a fee-on-transfer token is used, the debt is reduced by the whole amount, although only part of it is actually transferred to the `LToken`. This destroys the accounting of the `LToken` and is bad for the token holders.
+A misconfiguration of setting `_accountManager` to `address(0)` would open up possibilities for attacker to reinitialize the contract. 
 
 ## Code Snippet
-https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/protocol/src/core/AccountManager.sol#L380
-https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/protocol/src/core/AccountManager.sol#L236
+- protocol/src/core/Account.sol:59
+
+```solidity
+function init(address _accountManager) external {
+        if (accountManager != address(0)) 
+            revert Errors.ContractAlreadyInitialized();
+        accountManager = _accountManager;
+    }
+```
 
 ## Tool used
 
 Manual Review
 
 ## Recommendation
-The actual amount that was transferred could be checked. However, not supporting fee-on-transfer tokens is also completely fine in my opinion. Maybe that is already intended, but I did not find anything and wanted to make sure that you are aware of the issues with these tokens.
+Prevent `_accountManager` to be `address(0)` when calling the function.
+
+```solidity
+function init(address _accountManager) external {
+        require(_accountManager != address(0), "Cannot init as 0x0 address!");
+        if (accountManager != address(0)) 
+            revert Errors.ContractAlreadyInitialized();
+        accountManager = _accountManager;
+    }
+```

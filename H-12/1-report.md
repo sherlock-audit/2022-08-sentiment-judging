@@ -1,29 +1,23 @@
 Lambda
-# Stable2CurveOracle: Missing normalization
+# BalancerController: Can be misused to get non-approved tokens into the account
 
 ## Summary
-The price that is returned by `getPrice()` of `Stable2CurveOracle` is not normalized to 10^18, leading to wrong values for those tokens.
+In `BalancerController`s `canExit`, it is not checked if the `tokensIn` are allowed.
 
 ## Vulnerability Detail
-`oracleFacade.getPrice(ICurvePool(token).coins(0))` returns a price with 18 decimals. However, `ICurvePool(token).get_virtual_price()` also returns a price that is normalized to 18 decimals. This is for instance visible in the source code of the stETH / ETH pool: `@return LP token virtual price normalized to 1e18` (https://etherscan.io/address/0xDC24316b9AE028F1497c275EB9192a3Ea0f67022#code)
+When exiting a Balancer pool, it is possible to get tokens that are not allowed (i.e., where `controllerFacade.isTokenAllowed` would return false). There are two ways how this can happen:
+1.) The pool was joined by the controller. In this case, the disallowed assets would have been in the account previously (otherwise, joining the pool is not possible). But this is possible, the user could have simply transferred those assets (via an ERC20 transfer) to his account.
+2.) The user joined the pool outside of the controller (with an EOA) and transferred the pool token (via an ERC20 transfer) to his account.
 
 ## Impact
-The returned prices for the LP tokens will have 36 decimals. For instance, the stETH / ETH `get_virtual_price()` at the time of writing is 1049449001674373194. Assuming stETH is 0.95 ETH (9.5 * 1e17), the returned value will be:
-1049449001674373194 * 9.5 * 1e17 ~= 1e36
-
-This is wrong and will cause those LP tokens to be significantly overvalued, which can be exploited to take out debt positions where the health ratio (if properly calculated) would be way below 1.
+Because those tokens are added to the account's asset, it can be exploited to have tokens as collateral that are not allowed. For instance, let's say the protocol disallows SHIB because it is too volatile and therefore too risky. Using the method described above, a user could end up in a situation where SHIB is added to his assets and therefore considered in the collateral calculations. This puts the protocols assets at risk, because all tokens (that have a Balancer pool) can be added as collateral and therefore create account states that are too risky.
 
 ## Code Snippet
-https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/oracle/src/curve/Stable2CurveOracle.sol#L47
+https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/controller/src/balancer/BalancerController.sol#L130
 
 ## Tool used
 
 Manual Review
 
 ## Recommendation
-```
-return ((price0 < price1) ? price0 : price1).mulWadDown(
-            ICurvePool(token).get_virtual_price()
-           ).divWadDown(1e18);
-```
-This will correctly return ~1e18 in the above example, which is more or less the current price (1 ETH) of this LP token.
+One option would be to check `controllerFacade.isTokenAllowed` for all returned tokens. A better option IMO would be to change the design and drop all of this `isTokenAllowed` checks in the controllers. Instead, the `AccountManager` could check `isCollateralAllowed` for all returned tokens. Like that, the tokens would only need to be white-listed in one place and the solution would be less error-prone.

@@ -1,86 +1,41 @@
-ladboy233
-# Potential Multichain signature replay in token approval
+defsec
+# Should check return data from chainlink aggregators
 
 ## Summary
 
-Because we are not using chain id to verify the signature in permit funciton in ERC20.sol, signature can be reused in another blockchain to replay the transaction.
+The external Chainlink oracle, which provides index price information to the system, introduces risk inherent to any dependency on third-party data sources. For example, the oracle could fall behind or otherwise fail to be maintained, resulting in outdated data being fed to protocol.
+
+## Severity
+Medium
 
 ## Vulnerability Detail
 
-Let's look into the permit function in ERC20.sol
-
-```
-    function permit(
-        address owner,
-        address spender,
-        uint256 value,
-        uint256 deadline,
-        uint8 v,
-        bytes32 r,
-        bytes32 s
-    ) public virtual {
-        require(deadline >= block.timestamp, "PERMIT_DEADLINE_EXPIRED");
-
-        // Unchecked because the only math done is incrementing
-        // the owner's nonce which cannot realistically overflow.
-        unchecked {
-            address recoveredAddress = ecrecover(
-                keccak256(
-                    abi.encodePacked(
-                        "\x19\x01",
-                        DOMAIN_SEPARATOR(),
-                        keccak256(
-                            abi.encode(
-                                keccak256(
-                                    "Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)"
-                                ),
-                                owner,
-                                spender,
-                                value,
-                                nonces[owner]++,
-                                deadline
-                            )
-                        )
-                    )
-                ),
-                v,
-                r,
-                s
-            );
-
-            require(recoveredAddress != address(0) && recoveredAddress == owner, "INVALID_SIGNER");
-
-            allowance[recoveredAddress][spender] = value;
-        }
-
-        emit Approval(owner, spender, value);
-    }
-```
-
-we use the field owner, spender, value, bounces and deadline to verify the signature.
-
-we are missing the chain Id here.
+The getPrice function in the contract ChainlinkOracle.sol fetches the asset price from a Chainlink aggregator using the latestRoundData function. However, there are no checks on roundID nor timeStamp, resulting in stale prices. The oracle wrapper calls out to a chainlink oracle receiving the latestRoundData(). It then checks freshness by verifying that the answer is indeed for the last known round. The returned updatedAt timestamp is not checked.
 
 ## Impact
 
-because we are not using the chain id to verify the signature, a user can take the signature from one blockchain and replay the transaction using the same signature in another blockchain to get the token approval.
+Stale prices could put funds at risk. According to Chainlink's documentation, This function does not error if no answer has been reached but returns 0, causing an incorrect price fed to the PriceOracle. The external Chainlink oracle, which provides index price information to the system, introduces risk inherent to any dependency on third-party data sources. For example, the oracle could fall behind or otherwise fail to be maintained, resulting in outdated data being fed to protocol
 
 ## Code Snippet
 
-## Tool used
+[ChainlinkOracle.sol#L67](https://github.com/sherlock-audit/2022-08-sentiment-defsec/blob/main/oracle/src/chainlink/ChainlinkOracle.sol#L67)
 
+## Tool used
 Manual Review
 
 ## Recommendation
 
-we recommand add chain id to verify the signature.
+Consider to add checks on the return data with proper revert messages if the price is stale or the round is incomplete, for example:
 
+```solidity
+(uint80 roundID, int256 price, , uint256 timeStamp, uint80 answeredInRound) = ETH_CHAINLINK.latestRoundData();
+require(price > 0, "Chainlink price <= 0"); 
+require(answeredInRound >= roundID, "...");
+require(timeStamp != 0, "...");
 ```
-function getChainID() internal view returns (uint256) {
-    uint256 id;
-    assembly {
-        id := chainid()
-    }
-    return id;
-}
-```
+
+## Team  
+-
+
+## Sherlock  
+- 

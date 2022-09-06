@@ -1,41 +1,22 @@
 JohnSmith
-# ERC4626 Oracle may return incorrect price
+# Interest is not collected until borrower choses to
 
-https://github.com/sentimentxyz/oracle/blob/59b26a3d8c295208437aad36c470386c9729a4bc/src/erc4626/ERC4626Oracle.sol#L35-L43
-## [M] ERC4626 Oracle may return incorrect price
+https://github.com/sentimentxyz/protocol/blob/main/src/tokens/LToken.sol#L153
+## [M] Interest is not collected until borrower choses to
 ### Problem
-`decimals()` of underlying asset of ERC4626 and vault's `decimals()` may have different values
-as result price calculated incorrectly.
+When LToken lends its underlying asset it does not have means to collect it until borrower decides to repay or gets liquidated.
+If borrower has a lot of collateral, he can chose not to repay for any amount of time. 
+LToken only increases record of how much borrower is owed, but interest is never paid until liquidation or repay.
+Lenders may choose to withdraw available for LToken underlying asset and will be available to get only amount of asset that vault actally owns, so late withrawers may end up in a situation when vault does not own any underlying asset, but only has `borrows` record, which will be rapaid god knows when, maybe in years time.
 ### Proof of Concept
-```solidity
-oracle/src/erc4626/ERC4626Oracle.sol
-35:     function getPrice(address token) external view returns (uint) {
-36:         uint decimals = IERC4626(token).decimals();
-37:         return IERC4626(token).previewRedeem(
-38:             10 ** decimals
-39:         ).mulDivDown(
-40:             oracleFacade.getPrice(IERC4626(token).asset()),
-41:             10 ** decimals  //@audit decimals of asset may be not equal to vault decimals
-42:         );
-43:     }
-```
-we get price Per Share `previewRedeem(10**shareTokenDecimals)`
-and then calcultaing price `pricePerShare * assetPriceInETH / 10**shareTokenDecimals`
-if `shareTokenDecimals` is not equal to asset decimals then we get something not useful
+- Alice deposits to LToken vault 100 ETH worth of some asset
+- Bob's account has 1k ETH  collateral 
+- Bob borrows 50 ETH
+- LToken vault has only 50 ETH worth of underlying asset
+- Alice can withdraw only 50 ETH OR 
+- Charlie deposits 50 ETH
+- Alice withdraws 100 ETH
+- Charlie can't withdraw anything, not even interest accrued, until Bob choses to repay or get's liquidated, which may take years.
+I guess the LToken vault becomes temporarily insolvent 
 ### Mitigation
-Denominator should be underlying asset decimals
-```diff
-function getPrice(address token) external view returns (uint) {
-        uint decimals = IERC4626(token).decimals();
-+	uint assetDecimals = (IERC4626(token).asset()).decimals();
-        return IERC4626(token).previewRedeem(
-            10 ** decimals
-        ).mulDivDown(
-            oracleFacade.getPrice(IERC4626(token).asset()),
--            10 ** decimals
-+	     10 ** assetDecimals
-        );
-    }
-```
-Reminder how you did it correctly in YTokenOracle:
-https://github.com/sentimentxyz/oracle/blob/59b26a3d8c295208437aad36c470386c9729a4bc/src/yearn/YTokenOracle.sol#L38-L43
+Make it possible to collect some actual value from Accounts after some time intervals.

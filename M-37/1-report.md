@@ -1,35 +1,21 @@
-Avci
-#  Contract Locking Received Ethers 
+Lambda
+# LToken: Borrow rate manipulation possible
 
 ## Summary
-Contract locking ether that comes into 
+There are situations where it is possible to manipulate the utilization in order to reduce the accrued interest.
 
 ## Vulnerability Detail
-Receive function is a payable and anyone can deposit ether to contract but function do not doing any operation with deposited ether. 
-
+`getRateFactor()` passes `asset.balanceOf(address(this))` to the calculation of the borrow rate, which uses the value for the utilization calculation. Someone who has borrowed a lot (and therefore wants that the interest stays low), can increase this value before the interest rate accrual to keep the utilization rate low. While every call to `deposit` calls `updateState()` (which makes this attack not possible), it is possible to transfers assets into the contract before the call to `updateState()`. The assets will be lost, but it can still be beneficial if `updateState()` was not called in a long time (meaning that the reduction in accrued interest is large).
 
 ## Impact
-Ether locks for ever in the contract Account.sol
+Imagine the extreme case where Bob is the only borrower and the interest rate was not accrued for one year. Because utilization is very low, the accrued interest would be very high. Bob calculates that it is better for him to first transfer some assets to the LToken contract (that will be locked up forever) and then call `updateState()`. This results in a loss of interest for the borrowers.
 
 ## Code Snippet
-https://github.com/sentimentxyz/protocol/blob/4e45871e4540df0f189f6c89deb8d34f24930120/src/core/Account.sol#L196
-https://github.com/sentimentxyz/protocol/blob/4e45871e4540df0f189f6c89deb8d34f24930120/src/tokens/LEther.sol#L55
-
+https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/protocol/src/tokens/LToken.sol#L223
 
 ## Tool used
 
 Manual Review
 
 ## Recommendation
-If the function has nothing to do with money, it should revert it or remove payable.
-
-```receive() public payable { revert (); }```
-When the user tries to send eth to contract, receive() do revert eth to the user.
-
-```receive() public {}```
-When receive function doesn't have a payable attribute, the user can't send eth to contract.
-
-
-## Reference:
-https://github.com/crytic/slither/wiki/Detector-Documentation#contracts-that-lock-ether
-
+Track the deposited assets in `ERC4626`, use that value instead of the balance.
