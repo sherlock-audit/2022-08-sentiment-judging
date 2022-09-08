@@ -1,45 +1,44 @@
 hyh
-# LEther's redeemEth can burn shares of a user for nothing
+# Native funds mistakenly sent to LEther will be permanently frozen
 
-## Summary    
+## Summary
 
-A user can lose all his ETH held with the LEther via sequence of dust redeemEth() calls, with each burning some shares, but yielding zero ETH for the user due to rounding down in previewRedeem().
+LEther accepts native funds sent over without an existing function call.
+
+All native funds sent to the contract this way will be frozen permanently.
 
 ## Vulnerability Detail
 
-previewRedeem() and previewDeposit() call convertToAssets() and convertToShares() correspondingly, with both functions performing `mulDivDown`, so the resulting amount can be rounded to zero. Contrary to other parts of the implementation this isn't checked in redeemEth(), so it can lose all user's funds with a sequence of `redeemEth(shares)` with small enough `shares`, each of them rounding to zero `assets`.
+The only native tokens utilizing business logic in LEther is depositEth(), that operates `msg.value` only. Parent LToken and ERC4626 contracts do not deal with native funds.
+
+There is no way to retrieve native funds directly sent to LEther contract and there is no business logic utilizing them, so `receive() external payable` provides a way for a permanent fund freeze and no utility.
 
 ## Impact
 
-User can lose up to all funds held with the LEther due to rounding. I.e. the sequence of redeemEth() calls can empty a LEther account of any size.
+Setting the severity to **medium** as this is conditional on user/downstream system mistake of directly sending the native funds or calling a non-existing signature with the native funds attached.
 
-Placing severity to be **medium** as that's contingent on user actions, each of them being, however, fully valid. Theoretically this can be used as a base of griefing attack by a third party, which, for example, not being able to directly retrieve funds, but can make a user lose all LEther held funds with such a calls.
+Impact, however, is the loss of these funds for such users.
 
 ## Code Snippet
 
-`assets` in redeemEth() aren't controlled to be non-zero after rounding:
+The only native funds operating business logic is depositEth() that deals with `msg.value` only and cannot reach any other native funds on the contract balance:
 
-https://github.com/sherlock-audit/2022-08-sentiment-dmitriia/blob/9745a9a32641e4a709dcf771bfcfb97cb1e89bd9/protocol/src/tokens/LEther.sol#L47-L49
+https://github.com/sherlock-audit/2022-08-sentiment-dmitriia/blob/9745a9a32641e4a709dcf771bfcfb97cb1e89bd9/protocol/src/tokens/LEther.sol#L31-L38
 
-previewRedeem() rounds down:
+Notice that total assets of the contract is determined with inherited LToken's totalAssets(), which uses WETH balance:
 
-https://github.com/sherlock-audit/2022-08-sentiment-dmitriia/blob/9745a9a32641e4a709dcf771bfcfb97cb1e89bd9/protocol/src/tokens/utils/ERC4626.sol#L154-L156
+https://github.com/sherlock-audit/2022-08-sentiment-dmitriia/blob/9745a9a32641e4a709dcf771bfcfb97cb1e89bd9/protocol/src/tokens/LToken.sol#L185-L193
 
-https://github.com/sherlock-audit/2022-08-sentiment-dmitriia/blob/9745a9a32641e4a709dcf771bfcfb97cb1e89bd9/protocol/src/tokens/utils/ERC4626.sol#L132-L136
+Native funds sent directly aren't deposited to WETH and do not increase total assets this way, so the shareholders have no access to such funds either.
+
+I.e. any funds that end up on LEther balance via general receive() will become permanently frozen.
 
 ## Recommendation
 
-Consider adding the check similar to other parts of the logic:
+Consider removing the receive() as it's not used in the logic:
 
-https://github.com/sherlock-audit/2022-08-sentiment-dmitriia/blob/9745a9a32641e4a709dcf771bfcfb97cb1e89bd9/protocol/src/tokens/LEther.sol#L47-L49
+https://github.com/sherlock-audit/2022-08-sentiment-dmitriia/blob/9745a9a32641e4a709dcf771bfcfb97cb1e89bd9/protocol/src/tokens/LEther.sol#L55
 
 ```solidity
-    function redeemEth(uint shares) external {
-        uint assets = previewRedeem(shares);
-+       require(assets != 0, "ZERO_ASSETS");
-        _burn(msg.sender, shares);
+-   receive() external payable {}
 ```
-
-As a broader measure consider introducing dust threshold and require that it should be met for the each amount retrieved.
-
-The threshold value should correspond to the situation when it's not economically feasible to spend gas on the call given some historical median price of it.

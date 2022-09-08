@@ -1,30 +1,45 @@
-panprog
-# If account is not liquidated in time and becomes unprofitable to liquidate, there are no incentives for liquidators to liquidate it, possibly locking the funds borrowed by these accounts forever
+hyh
+# LEther's redeemEth can burn shares of a user for nothing
 
-## Summary
+## Summary    
 
-If any account's health falls below 1.0 due to quick price movement and/or network congestion, it is not profitable for liquidators to liquidate it and thus the funds might be frozen in the account, which will lead to `LToken` lenders being unable to withdraw all funds they have deposited.
+A user can lose all his ETH held with the LEther via sequence of dust redeemEth() calls, with each burning some shares, but yielding zero ETH for the user due to rounding down in previewRedeem().
 
 ## Vulnerability Detail
 
-Currently liquidator pays out full debt for the account it liquidates, receiving all account assets in return. This works when the account health is above 1.0 as it's profitable for the liquidator. However, if liquidators do not liquidate an account in time (due to quick price movement or network congestion), then liquidating account will put liquidators in a loss, so they won't liquidate it. If the price which caused the liquidation never recovers (such as `LUNA` crash), then amount borrowed by the account will be locked in it forever. This will make `LToken` impossible to pay back all the lenders, which can trigger a bank run (the last lenders to exit will not be able to withdraw).
+previewRedeem() and previewDeposit() call convertToAssets() and convertToShares() correspondingly, with both functions performing `mulDivDown`, so the resulting amount can be rounded to zero. Contrary to other parts of the implementation this isn't checked in redeemEth(), so it can lose all user's funds with a sequence of `redeemEth(shares)` with small enough `shares`, each of them rounding to zero `assets`.
 
 ## Impact
 
-If a large account quickly falls below 1.0 health for any reason and then never goes back above 1.0 health again, a large borrowed amount might be locked in it, making it impossible to ever withdraw from LToken for all lenders.
+User can lose up to all funds held with the LEther due to rounding. I.e. the sequence of redeemEth() calls can empty a LEther account of any size.
+
+Placing severity to be **medium** as that's contingent on user actions, each of them being, however, fully valid. Theoretically this can be used as a base of griefing attack by a third party, which, for example, not being able to directly retrieve funds, but can make a user lose all LEther held funds with such a calls.
 
 ## Code Snippet
 
-https://github.com/sherlock-audit/2022-08-sentiment-panprog/blob/6da8a0e43d272eda0d40760cd90c50ed7ce21fee/protocol/src/core/AccountManager.sol#L367-L385
+`assets` in redeemEth() aren't controlled to be non-zero after rounding:
 
-## Tool used
+https://github.com/sherlock-audit/2022-08-sentiment-dmitriia/blob/9745a9a32641e4a709dcf771bfcfb97cb1e89bd9/protocol/src/tokens/LEther.sol#L47-L49
 
-Manual Review
+previewRedeem() rounds down:
+
+https://github.com/sherlock-audit/2022-08-sentiment-dmitriia/blob/9745a9a32641e4a709dcf771bfcfb97cb1e89bd9/protocol/src/tokens/utils/ERC4626.sol#L154-L156
+
+https://github.com/sherlock-audit/2022-08-sentiment-dmitriia/blob/9745a9a32641e4a709dcf771bfcfb97cb1e89bd9/protocol/src/tokens/utils/ERC4626.sol#L132-L136
 
 ## Recommendation
 
-There must be some mechanism to let the protocol unlock borrows from accounts which are not profitable to liquidate. Since such accounts can only be liquidated for a loss, somebody has to pay for it. Typically, this loss is shared pro-rata between lenders (reduced total assets with the same share supply), but can also be paid from some insurance fund or the treasury.
+Consider adding the check similar to other parts of the logic:
 
-Consider adding "bad debt" liquidations (make it profitable for liquidators to liquidate accounts with health below 1.0), either sharing the bad debt between all lenders or paying it out from the treasury or some insurance fund. 
+https://github.com/sherlock-audit/2022-08-sentiment-dmitriia/blob/9745a9a32641e4a709dcf771bfcfb97cb1e89bd9/protocol/src/tokens/LEther.sol#L47-L49
 
-If you do implement it, be extra careful for re-entrancy, which can easily put account into low health via exec and then liquidate with bad debt.
+```solidity
+    function redeemEth(uint shares) external {
+        uint assets = previewRedeem(shares);
++       require(assets != 0, "ZERO_ASSETS");
+        _burn(msg.sender, shares);
+```
+
+As a broader measure consider introducing dust threshold and require that it should be met for the each amount retrieved.
+
+The threshold value should correspond to the situation when it's not economically feasible to spend gas on the call given some historical median price of it.

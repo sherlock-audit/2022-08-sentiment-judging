@@ -1,38 +1,50 @@
-Ruhum
-# Chainlink oracle isn't validated properly
+0xSmartContract
+# Add to Blacklist function
 
 ## Summary
-Chainlink oracles have to be validated for the data's recency. Otherwise, your protocol might work with stale data.
 
-## Vulnerability Detail
-A recent example is the crash of LUNA and UST. The LUNA Chainlink oracle stopped updating at a price of `$0.10` although the actual price of the asset was way lower. That allowed attackers to borrow more assets for their deposited LUNA tokens than they should be on the Blizz protocol, see [their post mortem](https://medium.com/@blizzfinance/blizz-finance-post-mortem-2425a33fe28b).
-The Sentiment protocol doesn't validate the oracle at all which makes them vulnerable to the same issue as Blizz.
+Cryptocurrency mixing service, Tornado Cash, has been blacklisted in the OFAC.
+A lot of blockchain companies, token projects, NFT Projects have ```blacklisted``` all Ethereum addresses owned by Tornado Cash listed in the US Treasury Department's sanction against the protocol.
+(https://home.treasury.gov/policy-issues/financial-sanctions/recent-actions/20220808)
+In addition, these platforms even ban accounts that have received ETH on their account with Tornadocash
 
-## Impact
-An attacker will be able to borrow more funds than they should be.
+Some of these Projects;
+* USDC (https://www.circle.com/en/usdc)
+* Flashbots (https://www.paradigm.xyz/portfolio/flashbots )
+* Aave (https://aave.com/)
+* Uniswap
+* Balancer
+* Infura
+* Alchemy 
+* Opense
+* dYdX 
 
-## Code Snippet
-https://github.com/sentimentxyz/oracle/blob/59b26a3d8c295208437aad36c470386c9729a4bc/src/chainlink/ChainlinkOracle.sol#L50-L58
+Details on the subject;
+https://twitter.com/bantg/status/1556712790894706688?s=20&t=HUTDTeLikUr6Dv9JdMF7AA
 
-```sol
-    function getPrice(address token) external view virtual returns (uint) {
-        (, int answer,,,) =
-            feed[token].latestRoundData();
+https://cryptopotato.com/defi-protocol-aave-bans-justin-sun-after-he-randomly-received-0-1-eth-from-tornado-cash/
 
-        if (answer < 0)
-            revert Errors.NegativePrice(token, address(feed[token]));
+For this reason, every project in the Ethereum network must have a blacklist function, this is a good method to avoid legal problems in the future, apart from the current need.
 
-        return (
-            (uint(answer)*1e18)/getEthPrice()
-        );
-    }
+Transactions from the project by an account funded by Tonadocash or banned by OFAC can lead to legal problems.Especially American Citizens may want to get addresses to the blacklist legally, this is not an obligation
+
+```The ban on Tornado Cash makes little sense, because in the end, no one can prevent people from using other mixer smart contracts, or forking the existing ones. It neither hinders cybercrime, nor privacy.```
+
+Here is the most beautiful and close to the project example; Manifold
+
+Manifold Contract
+https://etherscan.io/address/0xe4e4003afe3765aca8149a82fc064c0b125b9e5a#code
+
+```js
+     modifier nonBlacklistRequired(address extension) {
+         require(!_blacklistedExtensions.contains(extension), "Extension blacklisted");
+         _;
+     }
 ```
 
-The price is used to determine the value in WEI which is used to determine the state of the account: https://github.com/sentimentxyz/protocol/blob/4e45871e4540df0f189f6c89deb8d34f24930120/src/core/RiskEngine.sol#L183
 
 ## Tool used
-
 Manual Review
 
 ## Recommendation
-Chainlink recommends the following steps for risk mitigation: https://docs.chain.link/docs/selecting-data-feeds/#risk-mitigation
+Recommended Mitigation Steps add to Blacklist function and modifier

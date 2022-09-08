@@ -1,44 +1,38 @@
-hyh
-# Native funds mistakenly sent to LEther will be permanently frozen
+Ruhum
+# Chainlink oracle isn't validated properly
 
 ## Summary
-
-LEther accepts native funds sent over without an existing function call.
-
-All native funds sent to the contract this way will be frozen permanently.
+Chainlink oracles have to be validated for the data's recency. Otherwise, your protocol might work with stale data.
 
 ## Vulnerability Detail
-
-The only native tokens utilizing business logic in LEther is depositEth(), that operates `msg.value` only. Parent LToken and ERC4626 contracts do not deal with native funds.
-
-There is no way to retrieve native funds directly sent to LEther contract and there is no business logic utilizing them, so `receive() external payable` provides a way for a permanent fund freeze and no utility.
+A recent example is the crash of LUNA and UST. The LUNA Chainlink oracle stopped updating at a price of `$0.10` although the actual price of the asset was way lower. That allowed attackers to borrow more assets for their deposited LUNA tokens than they should be on the Blizz protocol, see [their post mortem](https://medium.com/@blizzfinance/blizz-finance-post-mortem-2425a33fe28b).
+The Sentiment protocol doesn't validate the oracle at all which makes them vulnerable to the same issue as Blizz.
 
 ## Impact
-
-Setting the severity to **medium** as this is conditional on user/downstream system mistake of directly sending the native funds or calling a non-existing signature with the native funds attached.
-
-Impact, however, is the loss of these funds for such users.
+An attacker will be able to borrow more funds than they should be.
 
 ## Code Snippet
+https://github.com/sentimentxyz/oracle/blob/59b26a3d8c295208437aad36c470386c9729a4bc/src/chainlink/ChainlinkOracle.sol#L50-L58
 
-The only native funds operating business logic is depositEth() that deals with `msg.value` only and cannot reach any other native funds on the contract balance:
+```sol
+    function getPrice(address token) external view virtual returns (uint) {
+        (, int answer,,,) =
+            feed[token].latestRoundData();
 
-https://github.com/sherlock-audit/2022-08-sentiment-dmitriia/blob/9745a9a32641e4a709dcf771bfcfb97cb1e89bd9/protocol/src/tokens/LEther.sol#L31-L38
+        if (answer < 0)
+            revert Errors.NegativePrice(token, address(feed[token]));
 
-Notice that total assets of the contract is determined with inherited LToken's totalAssets(), which uses WETH balance:
+        return (
+            (uint(answer)*1e18)/getEthPrice()
+        );
+    }
+```
 
-https://github.com/sherlock-audit/2022-08-sentiment-dmitriia/blob/9745a9a32641e4a709dcf771bfcfb97cb1e89bd9/protocol/src/tokens/LToken.sol#L185-L193
+The price is used to determine the value in WEI which is used to determine the state of the account: https://github.com/sentimentxyz/protocol/blob/4e45871e4540df0f189f6c89deb8d34f24930120/src/core/RiskEngine.sol#L183
 
-Native funds sent directly aren't deposited to WETH and do not increase total assets this way, so the shareholders have no access to such funds either.
+## Tool used
 
-I.e. any funds that end up on LEther balance via general receive() will become permanently frozen.
+Manual Review
 
 ## Recommendation
-
-Consider removing the receive() as it's not used in the logic:
-
-https://github.com/sherlock-audit/2022-08-sentiment-dmitriia/blob/9745a9a32641e4a709dcf771bfcfb97cb1e89bd9/protocol/src/tokens/LEther.sol#L55
-
-```solidity
--   receive() external payable {}
-```
+Chainlink recommends the following steps for risk mitigation: https://docs.chain.link/docs/selecting-data-feeds/#risk-mitigation
