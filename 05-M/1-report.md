@@ -1,4 +1,4 @@
-minera
+cergyk
 # Insufficient validation in Oracle data feed
 
 ## Summary

@@ -1,4 +1,4 @@
-minera
+cergyk
 # Interest is not collected until borrower choses to
 
 https://github.com/sentimentxyz/protocol/blob/main/src/tokens/LToken.sol#L153

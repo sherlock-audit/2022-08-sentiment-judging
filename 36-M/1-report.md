@@ -1,4 +1,4 @@
-minera
+cergyk
 #  Contract Locking Received Ethers 
 
 ## Summary

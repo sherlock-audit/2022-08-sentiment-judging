@@ -1,4 +1,4 @@
-minera
+cergyk
 # Decimals overflow can happen in getprice function
 
 ## Summary

@@ -1,4 +1,4 @@
-minera
+cergyk
 # Can not create LToken vaults with assets that do not conform to `IERC20Metadata`
 
 https://github.com/sentimentxyz/protocol/blob/4e45871e4540df0f189f6c89deb8d34f24930120/src/tokens/utils/ERC4626.sol#L41

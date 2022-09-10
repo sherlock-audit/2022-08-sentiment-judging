@@ -1,4 +1,4 @@
-minera
+cergyk
 # Missing verification in `getEthPrice` and `getPrice` could lead to stale/incorrect price
 
 ## Summary

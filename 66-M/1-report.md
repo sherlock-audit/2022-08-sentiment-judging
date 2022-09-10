@@ -1,4 +1,4 @@
-minera
+cergyk
 # Chainlink oracle isn't validated properly
 
 ## Summary

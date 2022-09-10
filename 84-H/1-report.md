@@ -1,4 +1,4 @@
-minera
+cergyk
 # `exec` function should check if the `target` is a contract
 
 ##  ```exec``` function should check if the ```target``` is a contract
