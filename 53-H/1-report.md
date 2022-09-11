@@ -1,4 +1,4 @@
-cergyk
+grhkm
 # Lack of target address validation in function exec in accountManager.sol can let malicious account owner execute instructions to insert malicious tokensIn and tokensOut 
 
 ## Summary
@@ -60,7 +60,7 @@ first, the controller.canCall check can by passed with a forged call data.
             controller.canCall(target, (amt > 0), data);
 ```
 
-for example, if the controller is AaveEthController.sol
+for example, if the controller is AaveEthController.sol, the first four bytes of the function are precomputed.
 
 ```
     /// @notice depositETH(address,address,uint16) function signature
@@ -84,7 +84,7 @@ for example, if the controller is AaveEthController.sol
     }
 ```
 
-to be pass the check,
+to be bypass the check,
 
 if the target address is malicious, the hacker can just create a function that has the same function signature hash
 
@@ -114,6 +114,29 @@ One of big failure is the poly network hack, resulting in the loss of billions. 
 
 https://rekt.news/polynetwork-rekt/
 
+In the case of polynetwork,
+
+the method putCurEpochConPubKeyBytes(bytes) can create the function hash
+
+```
+0x41973cd9
+```
+
+but the hacker generate a hash collision and execute the malicious function
+
+```
+f1121318093(bytes,bytes,uint64)
+```
+
+which also has the function hash 
+
+```
+0x41973cd9
+```
+
+my point is using the function signature hash is not valid and can be bypassed.
+
+
 then the function execute the instruction
 
 ```
@@ -139,63 +162,10 @@ in the line,
  (bool success, bytes memory retData) = target.call{value: amt}(data);
 ```
 
-assume the target and the call data is malicious, the bad instruction is executed in this line of code.
+Since we only use the first 4 bytes of the call data to trick the smart contract,
 
-there is another attack vector.
+assume the target and the rest of the call data are malicious, the bad instruction is executed in this line of code.
 
-check the UniV2Controller.sol
-
-```
-    function removeLiquidity(bytes calldata data)
-        internal
-        view
-        returns (bool, address[] memory, address[] memory)
-    {
-        (address tokenA, address tokenB) = abi.decode(data, (address, address));
-
-        address[] memory tokensIn = new address[](2);
-        tokensIn[0] = tokenA;
-        tokensIn[1] = tokenB;
-
-        address[] memory tokensOut = new address[](1);
-        tokensOut[0] = UNIV2_FACTORY.getPair(tokenA, tokenB);
-
-        return(true, tokensIn, tokensOut);
-    }
-```
-
-the hacker can controll the token A and token B passed in the line below
-
-```
-(address tokenA, address tokenB) = abi.decode(data, (address, address));
-```
-
-then tokensIn is messed up when calling
-
-```
- _updateTokensIn(account, tokensIn);
-```
-malicious user can insert bad token 
-
-mint a large amount of tokensIn to mess up with the account balance.
-
-the malicious user can create a bad token pool, with token pair tokenA and tokenB. token A and token B are both set by hackers.
-
-then in
-
-```
-  tokensOut[0] = UNIV2_FACTORY.getPair(tokenA, tokenB);
-```
-
-tokensOut is polluted.
-
-the user can trick the program to call
-
-```
- _updateTokensOut(account, tokensOut);
-```
-
-and remove the "tokensOut" token.
 
 ## Tool used
 
