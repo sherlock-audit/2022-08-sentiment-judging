@@ -1,4 +1,4 @@
-grhkm
+JohnSmith
 # First user can set arbitrary price, which may prevent some users to deposit
 
 ## [M] First user can set arbitrary price, which may prevent some users to deposit

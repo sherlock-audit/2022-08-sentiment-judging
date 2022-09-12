@@ -1,4 +1,4 @@
-grhkm
+Lambda
 # StableBalancerLPOracle: Wrong calculation
 
 ## Summary

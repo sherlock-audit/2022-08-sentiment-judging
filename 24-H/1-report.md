@@ -1,4 +1,4 @@
-grhkm
+Lambda
 # Stable2CurveOracle: Missing normalization
 
 ## Summary

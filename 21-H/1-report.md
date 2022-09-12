@@ -1,4 +1,4 @@
-grhkm
+Lambda
 # CTokenOracle: Missing normalization by 10^18
 
 ## Summary

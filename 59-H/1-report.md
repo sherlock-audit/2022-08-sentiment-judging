@@ -1,4 +1,4 @@
-grhkm
+JohnSmith
 # First user can steal part of everyone else's tokens
 
 https://github.com/sentimentxyz/protocol/blob/main/src/tokens/utils/ERC4626.sol#L48

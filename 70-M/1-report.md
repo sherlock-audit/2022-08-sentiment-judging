@@ -1,4 +1,4 @@
-grhkm
+CRYP70
 # ERC20 Tokens with Different Decimals to 1e18 lead to Inaccurate Price Feed
 
 ## Summary
