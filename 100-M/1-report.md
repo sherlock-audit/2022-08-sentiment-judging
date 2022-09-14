@@ -5,7 +5,8 @@ PwnPatrol
 Pasued tokens pose an insolvency risk to the system and can break the Liquidation Flow
 
 ## Vulnerability Detail
-Some popular ERC20 tokens implement a pausable feature. The most common examples are BNB.
+Some popular ERC20 tokens implement a pausable feature. The most common example is BNB.
+
 It is a rare event but when it happens it breaks Liquidation and Settlement Flows. For an extended pause period, it can render Liquidation Flow unprofitable for Liquidators.
 
 The probability of such an event is low and cannot be triggered by Attacker. On the other hand, the severity of such an event is high thus I'll mark this as Medium. 
@@ -42,5 +43,4 @@ Liquidation Flow DoS.
 Manual Review
 
 ## Recommendation
-Use try-catch logic to filter out pausable error cases.
-Implement partial liquidations (not sure if this is viable though - happy to work on fixes in the future)
+Use try-catch logic to filter out pausable error cases, or implement partial liquidations.

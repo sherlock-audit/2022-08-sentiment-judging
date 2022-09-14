@@ -2,16 +2,30 @@ PwnPatrol
 # Missing revert keyword
 
 ## Summary
-Missing `revert` keyword makes edge case success silently.
+Missing `revert` keyword in `functionDelegateCall` bypasses an intended safety check, allowing the function to fail silently.
 
 ## Vulnerability Detail
-Helper function `functionDelegateCall` lacks `revert` keyword which should be thrown when the address is not a contract. If the target is EOA (or a contract without code) then the delegate would be called and it would be successful (because EVM treats no code as STOP opcode).
+In the helper function `functionDelegateCall`, there is a check to confirm that the target being called is a contract.
+
+```solidity
+if (!isContract(target)) Errors.AddressNotContract;
+```
+
+However, there is a typo in the check that is missing the `revert` keyword.
+
+As a result, non-contracts can be submitted as targets, which will cause the delegatecall below to return success (because EVM treats no code as STOP opcode), even though it doesn't do anything.
+
+```solidity
+(bool success, ) = target.delegatecall(data);
+require(success, "CALL_FAILED");
+```
 
 ## Impact
-Delegate calls would be successful (but they should fail) and possibly unnoticed.
+The code doesn't accomplish its intended goal of checking to confirm that only contracts are passed as targets, so delegatecalls can silently fail.
 
 ## Code Snippet
 https://github.com/sherlock-audit/2022-08-sentiment-PwnPatrol0x/blob/main/protocol/src/utils/Helpers.sol#L66-L73
+
 ```solidity
     function functionDelegateCall(
         address target,
@@ -28,4 +42,8 @@ https://github.com/sherlock-audit/2022-08-sentiment-PwnPatrol0x/blob/main/protoc
 Manual Review
 
 ## Recommendation
-Add missing `revert` keyword
+Add missing `revert` keyword to L70 of Helpers.sol.
+
+```solidity
+if (!isContract(target)) revert Errors.AddressNotContract;
+```
