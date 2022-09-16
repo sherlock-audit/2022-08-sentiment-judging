@@ -19,3 +19,8 @@ Manual Review
 
 ## Recommendation
 Decrease `borrows` by the redeemed amount.
+
+
+## Sherlock Comment
+
+The `borrows` accounting seems correct as the `redeemReserves` only affects the tokens that are not borrowed, so a decrease on `borrows` is not needed.
