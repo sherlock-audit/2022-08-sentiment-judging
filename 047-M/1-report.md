@@ -26,13 +26,13 @@ the getPrice logic is implemented as
     }
 ```
 
-note the formula used is 
+note the formula used is
 
 ```
  2 * sqrt(r0 * r1 * p0 * p1) / totalSupply
 ```
 
-but 
+but
 
 ```
  IUniswapV2Pair(pair).totalSupply());
@@ -59,7 +59,7 @@ r1 is token1 -> B,
 
 3. The user borrows a large excessive large number of tokens and never repays back and leaves the bad debt.
 
-4. the user withdraws liquidity, repays the flash loan, and walks away with profit at the cost of the user. 
+4. the user withdraws liquidity, repays the flash loan, and walks away with profit at the cost of the user.
 
 Please check the simulation code before in Python implementation, the price is manipulated from 20 to 500
 
@@ -77,7 +77,7 @@ class Simulation:
         self.total_lp_supply = 10
 
     def get_price(self):
-        
+
         # 2 * sqrt(r0 * r1 * p0 * p1) / totalSupply
 
         return 2 * math.sqrt(
@@ -94,7 +94,7 @@ class Simulation:
     # liquidity = Math.min(amount0.mul(_totalSupply) / _reserve0, amount0.mul(_totalSupply) / _reserve0);
 
     def inflate(self, amount0, amount1):
-    
+
         self.reserve0 += amount0 # transfer amount0 into pair pool
         self.reserve1 += amount1 # transfer amount1 into pair pool.
 
@@ -120,7 +120,7 @@ if __name__ == "__main__":
     print('price after', price)
 ```
 
-the running result is 
+the running result is
 
 ```
 price before 20.0
