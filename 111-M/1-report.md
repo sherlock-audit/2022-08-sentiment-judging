@@ -26,7 +26,7 @@ For example:
 ```js
 (uint80 roundID ,answer,, uint256 timestamp, uint80 answeredInRound) = AggregatorV3Interface(chainLinkAggregatorMap[underlying]).latestRoundData();
 
-require(answer > 0, "Chainlink price <= 0"); 
+require(answer >= 0, "Chainlink price <= 0"); 
 require(answeredInRound >= roundID, "Stale price");
 require(timestamp != 0, "Round not complete");
 ```
