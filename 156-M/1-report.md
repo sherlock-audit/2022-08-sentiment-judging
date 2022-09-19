@@ -1,5 +1,5 @@
 Tutturu
-# Multiply collateral via a borrow and deposit loop
+# Collateral can be multiplied via a borrow and deposit loop
 
 ## Summary
 A user can borrow multiple times more than expected by withdrawing and redepositing the borrowed asset as collateral.

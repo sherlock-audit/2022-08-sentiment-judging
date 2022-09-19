@@ -222,7 +222,7 @@ Refer to the "Impact" section for more examples.
 
 The following two additional pieces of evidence show that it is not possible for Alice to clear all her outstanding debts even if she tried to call the functions with a different configuration.
 
-#### Additional Note #1 - User Attempts To Clear All Debt Again By Calling `repay` with `amt=type(uint256).max`
+#### Additional Note 1 - User Attempts To Clear All Debt Again By Calling `repay` with `amt=type(uint256).max`
 
 Assume that Alice thinks that she could clear all her outstanding debt by calling the following function for the second time.
 
@@ -262,7 +262,7 @@ Eventually, it will reach `require((borrowShares = convertAssetToBorrowShares(am
 
 Thus, the token is still not being removed from the account's borrow list array, and Alice's outstanding debt is still not cleared.
 
-#### Additional Note #2 - User Attempts To Clear All Debt Again By Calling `repay` by manually specifying the remaining debt
+#### Additional Note 2 - User Attempts To Clear All Debt Again By Calling `repay` by manually specifying the remaining debt
 
 Assume that Alice decides to try an alternative method by manually specifying the remaining debt when calling the `repay` function, and hoping that it will clear all her outstanding debt within the protocol. Alice calls the following:
 

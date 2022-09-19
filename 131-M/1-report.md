@@ -13,7 +13,7 @@ LToken vault that supports Fee-On-Transfer/Rebasing tokens will result in intern
 
 Assume that `XYZ` token is a fee-on-transfer token with a 10% transfer fee.
 
-#### Instance #1 - Deposit
+#### Instance 1 - Deposit
 
 Assume that the user deposits 100 XYZ tokens. The number of shares minted will be based on 100 XYZ tokens, but the actual amount of XYZ tokens received by the vault will only be 90 XYZ tokens.
 
@@ -36,7 +36,7 @@ File: ERC4626.sol
 60:     }
 ```
 
-#### Instance #2 - Minting
+#### Instance 2 - Minting
 
 Assuming that the user wants to mint 10 shares. The `previewMint` function determines that 100 XYZ tokens are needed to mint 10 shares. The vault proceeds to mint 10 shares to the user, but the actual amount of XYZ tokens received by the vault will only be 90 XYZ tokens.
 

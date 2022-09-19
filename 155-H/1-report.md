@@ -1,5 +1,5 @@
 Tutturu
-# Draining the protocol via an ERC777 token
+# Protocol can be drained via an ERC777 token
 
 ## Summary
 Account borrowed assets and collateral can be drained by diverting the execution flow if the collateral is an ERC777 token.
