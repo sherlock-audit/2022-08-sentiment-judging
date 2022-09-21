@@ -41,7 +41,7 @@ function repay(address account, address token, uint amt)
     LToken.updateState();
 
     uint borrowBalance = LToken.getBorrowBalance(account); //++++++++++++++++++++
-    if(amt > borrowBalance) 
+    if(amt > borrowBalance)
         amt = borrowBalance;
 
     account.withdraw(address(LToken), token, amt);
@@ -62,3 +62,7 @@ function settle(address account) external onlyOwner(account) {
     }
 }
 ```
+
+## Comment
+
+This behaviour is already present using the `type(uint256).max` check
