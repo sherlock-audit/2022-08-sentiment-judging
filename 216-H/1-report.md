@@ -67,3 +67,7 @@ Manual Review
 ## Recommendation
 
 Do not allow assets which could be liquidated, such as tokens from lending protocol (compound, AAVE, etc).
+
+## Comment
+
+The borrow call is not whitelisted in aave and compound
