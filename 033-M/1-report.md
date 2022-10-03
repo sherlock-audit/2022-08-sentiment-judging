@@ -16,8 +16,8 @@ Some tokens revert for zero value transfers (see https://github.com/d-xo/weird-e
 See above, an account cannot be liquidated. In certain conditions, this might even be triggerable by the user. For instance, a user could try to get on the USDC blacklist to avoid liquidations.
 
 ## Code Snippet
-https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/protocol/src/core/AccountManager.sol#L384
-https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/protocol/src/core/Account.sol#L166
+https://github.com/sherlock-audit/2022-08-sentiment/blob/main/protocol/src/core/AccountManager.sol#L384
+https://github.com/sherlock-audit/2022-08-sentiment/blob/main/protocol/src/core/Account.sol#L166
 
 ## Tool used
 

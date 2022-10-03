@@ -5,7 +5,7 @@ panprog
 
 If oracle is set for any `ERC777` or similar token (tokens which call receiver's hook after receiving it), re-entrancy in `Account.sweepTo` allows to borrow funds, which are immediately withdrawn along with all account assets without any health checks, leaving account with 0 assets and big debt, making it possible to drain all LToken funds.
 
-https://github.com/sherlock-audit/2022-08-sentiment-panprog/blob/6da8a0e43d272eda0d40760cd90c50ed7ce21fee/protocol/src/core/Account.sol#L163-L174
+https://github.com/sherlock-audit/2022-08-sentiment/blob/main/protocol/src/core/Account.sol#L163-L174
 
 ## Vulnerability Detail
 
@@ -21,11 +21,11 @@ List of bugs used in the attack:
 
 1. Uniswap v2 controller in `removeLiquidity` doesn't check if tokens received are allowed. It seems to assume that account can only have allowed uni v2 lp tokens (as it's checked in `addLiquidity`), however any lp tokens can easily be transferred to account directly (not via `exec`). This makes it possible to call `exec` to `removeLiquidity` and add ANY tokens to account's assets list (and if oracle is set for the token, `accountManager.exec` will succeed as it doesn't check for asset tokens to be allowed as collateral)
 
-https://github.com/sherlock-audit/2022-08-sentiment-panprog/blob/6da8a0e43d272eda0d40760cd90c50ed7ce21fee/controller/src/uniswap/UniV2Controller.sol#L182-L189
+https://github.com/sherlock-audit/2022-08-sentiment/blob/main/controller/src/uniswap/UniV2Controller.sol#L182-L189
 
 2. `Account.sweepTo` is very vulnerable to re-entrancy. While it assumes that asset tokens are ERC20, if ERC20-compatible tokens with callback hooks are allowed (such as `ERC777` tokens), these tokens can re-enter to steal funds.
 
-https://github.com/sherlock-audit/2022-08-sentiment-panprog/blob/6da8a0e43d272eda0d40760cd90c50ed7ce21fee/protocol/src/core/Account.sol#L163-L174
+https://github.com/sherlock-audit/2022-08-sentiment/blob/main/protocol/src/core/Account.sol#L163-L174
 
 Steps to steal funds from LToken:
 

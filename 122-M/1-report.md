@@ -11,7 +11,7 @@ The purpose of the protocol reserve within a LToken vault is to compensate the p
 
 The following functions within the `LToken` contract show that the protocol reserve is intentionally preserved by removing the protocol reserve from the calculation of total assets within a LToken vault. As such, whenever the Liquidity Providers (LPs) attempt to redeem their LP token, the protocol reserves will stay intact and will not be withdrawn by the LPs.
 
-https://github.com/sherlock-audit/2022-08-sentiment-xiaoming9090/blob/99afd59bb84307486914783be4477e5e416510e9/protocol/src/tokens/LToken.sol#L191
+https://github.com/sherlock-audit/2022-08-sentiment/blob/main/protocol/src/tokens/LToken.sol#L191
 
 ```solidity
 function totalAssets() public view override returns (uint) {
@@ -19,7 +19,7 @@ function totalAssets() public view override returns (uint) {
 }
 ```
 
-https://github.com/sherlock-audit/2022-08-sentiment-xiaoming9090/blob/99afd59bb84307486914783be4477e5e416510e9/protocol/src/tokens/LToken.sol#L195
+https://github.com/sherlock-audit/2022-08-sentiment/blob/main/protocol/src/tokens/LToken.sol#L195
 
 ```solidity
 function getBorrows() public view returns (uint) {
@@ -27,7 +27,7 @@ function getBorrows() public view returns (uint) {
 }
 ```
 
-https://github.com/sherlock-audit/2022-08-sentiment-xiaoming9090/blob/99afd59bb84307486914783be4477e5e416510e9/protocol/src/tokens/LToken.sol#L176
+https://github.com/sherlock-audit/2022-08-sentiment/blob/main/protocol/src/tokens/LToken.sol#L176
 
 ```solidity
 function getReserves() public view returns (uint) {
@@ -40,7 +40,7 @@ However, this measure is not applied consistently across the protocol. The follo
 
 In the worst-case scenario, the borrower can borrow all the assets from the LToken vault, including the protocol reserve.
 
-https://github.com/sherlock-audit/2022-08-sentiment-xiaoming9090/blob/99afd59bb84307486914783be4477e5e416510e9/protocol/src/tokens/LToken.sol#L128
+https://github.com/sherlock-audit/2022-08-sentiment/blob/main/protocol/src/tokens/LToken.sol#L128
 
 ```solidity
 File: LToken.sol

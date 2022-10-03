@@ -12,13 +12,13 @@ The lender will miss out on gains that should have accrued to them while the ass
 
 ## Code Snippet
 Lending tracks shares of the LToken:
-https://github.com/sherlock-audit/2022-08-sentiment-IllIllI000/blob/2e25699040ed87a9af62f2b637eafcc6b0b59cc5/protocol/src/tokens/LToken.sol#L140-L143
+https://github.com/sherlock-audit/2022-08-sentiment/blob/main/protocol/src/tokens/LToken.sol#L140-L143
 
 But repayment assumes that shares are equal to the same amount, regardless of which address held them, which is not true for airdrops:
-https://github.com/sherlock-audit/2022-08-sentiment-IllIllI000/blob/2e25699040ed87a9af62f2b637eafcc6b0b59cc5/protocol/src/tokens/LToken.sol#L160-L163
+https://github.com/sherlock-audit/2022-08-sentiment/blob/main/protocol/src/tokens/LToken.sol#L160-L163
 
 Rebasing tokens are supported, since Aave is a rebasing token:
-https://github.com/sherlock-audit/2022-08-sentiment-IllIllI000/blob/9ccbe41937173b03f6ea657178eb2efeb3790478/controller/src/aave/AaveEthController.sol#L28
+https://github.com/sherlock-audit/2022-08-sentiment/blob/main/controller/src/aave/AaveEthController.sol#L28
 ## Tool used
 
 Manual Review

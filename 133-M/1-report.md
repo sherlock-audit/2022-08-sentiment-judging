@@ -11,7 +11,7 @@ The `getPrice` function within the `ERC4626Oracle` contract is vulnerable to pri
 
 Based on the `getPrice` function, the price of the LP token of an ERC4626 vault is dependent on the `ERC4626.previewRedeem` and `oracleFacade.getPrice` functions. If the value returns by either `ERC4626.previewRedeem` or `oracleFacade.getPrice` can be manipulated within a single transaction/block, the price of the LP token of an ERC4626 vault is considered to be vulnerable to price manipulation.
 
-https://github.com/sherlock-audit/2022-08-sentiment-xiaoming9090/blob/99afd59bb84307486914783be4477e5e416510e9/oracle/src/erc4626/ERC4626Oracle.sol#L8
+https://github.com/sherlock-audit/2022-08-sentiment/blob/main/oracle/src/erc4626/ERC4626Oracle.sol#L8
 
 ```solidity
 File: ERC4626Oracle.sol
@@ -28,7 +28,7 @@ File: ERC4626Oracle.sol
 
 It was observed that the `ERC4626.previewRedeem` couldbe manipulated within a single transaction/block. As shown below, the `previewRedeem` function will call the `convertToAssets` function. Within the `convertToAssets`, the number of assets per share is calculated based on the current/spot total assets and current/spot supply that can be increased or decreased within a single block/transaction by calling the vault's deposit, mint, withdraw or redeem functions. This allows the attacker to artificially inflate or deflate the price within a single block/transaction.
 
-https://github.com/sherlock-audit/2022-08-sentiment-xiaoming9090/blob/99afd59bb84307486914783be4477e5e416510e9/protocol/src/tokens/utils/ERC4626.sol#L154
+https://github.com/sherlock-audit/2022-08-sentiment/blob/main/protocol/src/tokens/utils/ERC4626.sol#L154
 
 ```solidity
 File: ERC4626.sol
@@ -37,7 +37,7 @@ File: ERC4626.sol
 156:     }
 ```
 
-https://github.com/sherlock-audit/2022-08-sentiment-xiaoming9090/blob/99afd59bb84307486914783be4477e5e416510e9/protocol/src/tokens/utils/ERC4626.sol#L132
+https://github.com/sherlock-audit/2022-08-sentiment/blob/main/protocol/src/tokens/utils/ERC4626.sol#L132
 
 ```solidity
 File: ERC4626.sol

@@ -3,7 +3,7 @@ PwnPatrol
 
 ## Summary
 
-In the `ArbiDeploymentFlow.md` doc, it specifies the plan to add the UniV3Controller to controllerFacade, and then update it so it applies to Router (address: 0xE592427A0AEce92De3Edee1F18E0157C05861564). 
+In the `ArbiDeploymentFlow.md` doc, it specifies the plan to add the UniV3Controller to controllerFacade, and then update it so it applies to Router (address: `0xE592427A0AEce92De3Edee1F18E0157C05861564`). 
 
 However, some of the function signatures of the Router at this address don't match the signatures specified in the controller, so function calls will revert.
 

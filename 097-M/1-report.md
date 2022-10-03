@@ -24,7 +24,7 @@ require(success, "CALL_FAILED");
 The code doesn't accomplish its intended goal of checking to confirm that only contracts are passed as targets, so delegatecalls can silently fail.
 
 ## Code Snippet
-https://github.com/sherlock-audit/2022-08-sentiment-PwnPatrol0x/blob/main/protocol/src/utils/Helpers.sol#L66-L73
+https://github.com/sherlock-audit/2022-08-sentiment/blob/main/protocol/src/utils/Helpers.sol#L66-L73
 
 ```solidity
     function functionDelegateCall(
