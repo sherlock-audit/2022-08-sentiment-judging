@@ -1,55 +1,121 @@
-kankodu
-# Loss of Precision Bug
+WATCHPUG
+# A malicious early user/attacker can manipulate the LToken's pricePerShare to take an unfair share of future users' deposits
 
 ## Summary
-- Manipulation of LToken/LEther when totalSupply is zero can lead to implicit minimum deposit amount and loss of user funds due to rounding errors
+
+A well known attack vector for almost all shares based liquidity pool contracts, where an early user can manipulate the price per share and profit from late users' deposits because of the precision loss caused by the rather large value of price per share.
 
 ## Vulnerability Detail
-- Where: [ERC4626](https://github.com/sherlock-audit/2022-08-sentiment-kankodu/blob/main/protocol/src/tokens/utils/ERC4626.sol)
-- When: vault.totalSupply == 0
-- Description:
-    - When totalSupply is zero an attacker goes ahead and executes the following steps
-        1. Deposit 1 wei of token to mint 1 wei of shares
-        3. Transfer(Donate) z underlying tokens directly to vault address
-                - This leads to 1 wei of vault share worth z+1 tokens
-                - Attacker won't have any problem making this z as big as they want as they have all the claim to it as a holder of 1 Wei of vault share
-    - This attack has two implications
-        - Implicit minimum Amount and funds lost due to rounding errors
-            - If an attacker is successful in making 1 wei of vault share worth z underlying tokens and a user tries to mint vault shares using k* z underlying tokens then,
-                - If k<1, then the user gets zero vault shares and that fails with [ZERO_SHARES](https://github.com/sherlock-audit/2022-08-sentiment-kankodu/blob/main/protocol/src/tokens/utils/ERC4626.sol#L52) error.
-                    - This leads to an implicit minimum amount for a user at the attacker's discretion.
-                - If k>1, then users still get some vault shares but they lose (k- floor(k)) * z) of underlying tokens which get proportionally divided between vault share holders due to rounding errors.
-                    - users keep loosing up to 25% of their underlying tokens. (see [here](https://www.desmos.com/calculator/tjz5j62fng) for visualisation)
-                    - This means that for users to not lose value, they have to make sure that k is an integer.
+
+A malicious early user can `deposit()` with `1 wei` of `asset` token as the first depositor of the LToken, and get `1 wei` of shares.
+
+Then the attacker can send `10000e18 - 1` of `asset` tokens and inflate the price per share from 1.0000 to an extreme value of 1.0000e22 ( from `(1 + 10000e18 - 1) / 1`) .
+
+As a result, the future user who deposits `19999e18` will only receive `1 wei` (from `19999e18 * 1 / 10000e18`) of shares token.
+
+They will immediately lose `9999e18` or half of their deposits if they `redeem()` right after the `deposit()`.
+
 ## Impact
-- If this attack is executed there is no other way to rectify it then deploying a new LToken altogether.
+
+The attacker can profit from future users' deposits. While the late users will lose part of their funds to the attacker.
+
 ## Code Snippet
-- Add below test in [LToken.t.sol](https://github.com/sentimentxyz/protocol/blob/4e45871e4540df0f189f6c89deb8d34f24930120/src/test/tokens/LToken.t.sol)
+
+https://github.com/sentimentxyz/protocol/blob/4e45871e4540df0f189f6c89deb8d34f24930120/src/tokens/utils/ERC4626.sol#L48-L60
+
+```solidity
+function deposit(uint256 assets, address receiver) public virtual returns (uint256 shares) {
+    beforeDeposit(assets, shares);
+
+    // Check for rounding error since we round down in previewDeposit.
+    require((shares = previewDeposit(assets)) != 0, "ZERO_SHARES");
+
+    // Need to transfer before minting or ERC777s could reenter.
+    asset.safeTransferFrom(msg.sender, address(this), assets);
+
+    _mint(receiver, shares);
+
+    emit Deposit(msg.sender, receiver, assets, shares);
+}
 ```
-function testFailVictimInteraction() public {
-        uint256 z = 1000 ether;
-        erc20.mint(address(this), 2 * z + 1);
 
-        //step 1: mint 1 wei of share when totalSupply is zero
-        assert(lErc20.totalSupply() == 0);
-        erc20.approve(address(lErc20), 1);
-        lErc20.deposit(1, address(this));
-        assert(lErc20.balanceOf(address(this)) == 1);
+https://github.com/sentimentxyz/protocol/blob/4e45871e4540df0f189f6c89deb8d34f24930120/src/tokens/utils/ERC4626.sol#L138-L140
 
-        //step2: donate z
-        erc20.transfer(address(lErc20), z);
-
-        //victim tries to mint with less than z+1 amount gets 0 shares which fails
-
-        erc20.approve(address(lErc20), z);
-        lErc20.deposit(z, address(this));
-    }
-
+```solidity
+function previewDeposit(uint256 assets) public view virtual returns (uint256) {
+    return convertToShares(assets);
+}
 ```
+
+https://github.com/sentimentxyz/protocol/blob/4e45871e4540df0f189f6c89deb8d34f24930120/src/tokens/utils/ERC4626.sol#L126-L131
+
+```solidity
+function convertToShares(uint256 assets) public view virtual returns (uint256) {
+    uint256 supply = totalSupply; // Saves an extra SLOAD if totalSupply is non-zero.
+
+    return supply == 0 ? assets : assets.mulDivDown(supply, totalAssets());
+}
+```
+
+https://github.com/sentimentxyz/protocol/blob/4e45871e4540df0f189f6c89deb8d34f24930120/src/tokens/LToken.sol#L191-L193
+
+```solidity
+function totalAssets() public view override returns (uint) {
+    return asset.balanceOf(address(this)) + getBorrows() - getReserves();
+}
+```
+
 ## Tool used
 
 Manual Review
 
 ## Recommendation
-- I like how [BalancerV2](https://github.com/balancer-labs/balancer-v2-monorepo/blob/master/pkg/pool-utils/contracts/BasePool.sol#L307-L325) and [UniswapV2](https://github.com/Uniswap/v2-core/blob/master/contracts/UniswapV2Pair.sol#L119-L121) do it. some MINIMUM amount of pool tokens get burnt when the first mint happens
--  You can also go [BentoBox](https://github.com/sushiswap/bentobox/blob/canary/contracts/BentoBox.sol) route of allowing total supply to go zero but not anywhere between 0 and MINIMUM. 
+
+Consider requiring a minimal amount of share tokens to be minted for the first minter, and send a port of the initial mints as a reserve to the DAO so that the pricePerShare can be more resistant to manipulation.
+
+```solidity
+function deposit(uint256 assets, address receiver) public virtual returns (uint256 shares) {
+    beforeDeposit(assets, shares);
+
+    // Check for rounding error since we round down in previewDeposit.
+    require((shares = previewDeposit(assets)) != 0, "ZERO_SHARES");
+
+    // for the first mint, we require the mint amount > (10 ** decimals) / 100
+    // and send (10 ** decimals) / 1_000_000 of the initial supply as a reserve to DAO
+    if (totalSupply == 0 && decimals >= 6) {
+        require(shares > 10 ** (decimals - 2));
+        uint256 reserveShares = 10 ** (decimals - 6);
+        _mint(DAO, reserveShares);
+        shares -= reserveShares;
+    }
+
+    // Need to transfer before minting or ERC777s could reenter.
+    asset.safeTransferFrom(msg.sender, address(this), assets);
+
+    _mint(receiver, shares);
+
+    emit Deposit(msg.sender, receiver, assets, shares);
+}
+
+function mint(uint256 shares, address receiver) public virtual returns (uint256 assets) {
+    beforeDeposit(assets, shares);
+
+    assets = previewMint(shares); // No need to check for rounding error, previewMint rounds up.
+
+    // for the first mint, we require the mint amount > (10 ** decimals) / 100
+    // and send (10 ** decimals) / 1_000_000 of the initial supply as a reserve to DAO
+    if (totalSupply == 0 && decimals >= 6) {
+        require(shares > 10 ** (decimals - 2));
+        uint256 reserveShares = 10 ** (decimals - 6);
+        _mint(DAO, reserveShares);
+        shares -= reserveShares;
+    }
+
+    // Need to transfer before minting or ERC777s could reenter.
+    asset.safeTransferFrom(msg.sender, address(this), assets);
+
+    _mint(receiver, shares);
+
+    emit Deposit(msg.sender, receiver, assets, shares);
+}
+```

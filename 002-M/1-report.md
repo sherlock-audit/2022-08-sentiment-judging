@@ -1,41 +1,93 @@
-defsec
-# Should check return data from chainlink aggregators
+WATCHPUG
+# Lack of price freshness check in `ChainlinkOracle.sol#getPrice()` allows a stale price to be used
 
 ## Summary
 
-The external Chainlink oracle, which provides index price information to the system, introduces risk inherent to any dependency on third-party data sources. For example, the oracle could fall behind or otherwise fail to be maintained, resulting in outdated data being fed to protocol.
-
-## Severity
-Medium
+`ChainlinkOracle` should use the `updatedAt` value from the latestRoundData() function to make sure that the latest answer is recent enough to be used.
 
 ## Vulnerability Detail
 
-The getPrice function in the contract ChainlinkOracle.sol fetches the asset price from a Chainlink aggregator using the latestRoundData function. However, there are no checks on roundID nor timeStamp, resulting in stale prices. The oracle wrapper calls out to a chainlink oracle receiving the latestRoundData(). It then checks freshness by verifying that the answer is indeed for the last known round. The returned updatedAt timestamp is not checked.
+In the current implementation of `ChainlinkOracle.sol#getPrice()`, there is no freshness check. This could lead to stale prices being used.
+
+If the market price of the token drops very quickly ("flash crashes"), and Chainlink's feed does not get updated in time, the smart contract will continue to believe the token is worth more than the market value.
+
+Chainlink also advise developers to check for the `updatedAt` before using the price:
+
+> Your application should track the latestTimestamp variable or use the updatedAt value from the latestRoundData() function to make sure that the latest answer is recent enough for your application to use it. If your application detects that the reported answer is not updated within the heartbeat or within time limits that you determine are acceptable for your application, pause operation or switch to an alternate operation mode while identifying the cause of the delay.
+
+And they have this heartbeat concept:
+
+> Chainlink Price Feeds do not provide streaming data. Rather, the aggregator updates its latestAnswer when the value deviates beyond a specified threshold or when the heartbeat idle time has passed. You can find the heartbeat and deviation values for each data feed at data.chain.link or in the Contract Addresses lists.
+
+The `Heartbeat` on Arbitrum is usually `1h`.
+
+Source: https://docs.chain.link/docs/arbitrum-price-feeds/
 
 ## Impact
 
-Stale prices could put funds at risk. According to Chainlink's documentation, This function does not error if no answer has been reached but returns 0, causing an incorrect price fed to the PriceOracle. The external Chainlink oracle, which provides index price information to the system, introduces risk inherent to any dependency on third-party data sources. For example, the oracle could fall behind or otherwise fail to be maintained, resulting in outdated data being fed to protocol
+A stale price can cause the malfunction of multiple features across the protocol:
+
+1. `_valueInWei()` is using the price to calculate the value of the loan and collateral; A stale price will make the price calculation inaccurate so that certain accounts may not be liquidated when they should be, or be liquidated when they should not be.
+
+2. `ChainlinkOracle.sol#getPrice()` is used to calculate the value of various LPTokens (Aave, Balancer, Compound, Curve, and Uniswap). If the price is not accurate, it will lead to a deviation in the LPToken price and affect the calculation of asset prices.
+
+3. Stale asset prices can lead to bad debts to the protocol as the collateral assets can be overvalued, and the collateral value can not cover the loans.
 
 ## Code Snippet
 
-[ChainlinkOracle.sol#L67](https://github.com/sherlock-audit/2022-08-sentiment-defsec/blob/main/oracle/src/chainlink/ChainlinkOracle.sol#L67)
+https://github.com/sentimentxyz/oracle/blob/59b26a3d8c295208437aad36c470386c9729a4bc/src/chainlink/ChainlinkOracle.sol#L49-L59
+
+```solidity
+    function getPrice(address token) external view virtual returns (uint) {
+        (, int answer,,,) =
+            feed[token].latestRoundData();
+
+        if (answer < 0)
+            revert Errors.NegativePrice(token, address(feed[token]));
+
+        return (
+            (uint(answer)*1e18)/getEthPrice()
+        );
+    }
+```
+
+https://github.com/sentimentxyz/oracle/blob/59b26a3d8c295208437aad36c470386c9729a4bc/src/chainlink/ChainlinkOracle.sol#L65-L73
+
+```solidity
+    function getEthPrice() internal view returns (uint) {
+        (, int answer,,,) =
+            ethUsdPriceFeed.latestRoundData();
+
+        if (answer < 0)
+            revert Errors.NegativePrice(address(0), address(ethUsdPriceFeed));
+
+        return uint(answer);
+    }
+```
 
 ## Tool used
+
 Manual Review
 
 ## Recommendation
 
-Consider to add checks on the return data with proper revert messages if the price is stale or the round is incomplete, for example:
+Consider adding the missing freshness check for stale price:
 
 ```solidity
-(uint80 roundID, int256 price, , uint256 timeStamp, uint80 answeredInRound) = ETH_CHAINLINK.latestRoundData();
-require(price > 0, "Chainlink price <= 0"); 
-require(answeredInRound >= roundID, "...");
-require(timeStamp != 0, "...");
+    function getPrice(address token) external view virtual returns (uint) {
+        (, int answer,,,) =
+            feed[token].latestRoundData();
+        uint validPeriod = feedValidPeriod[token];
+
+        require(block.timestamp - updatedAt < validPeriod, "freshness check failed.")
+
+        if (answer <= 0)
+            revert Errors.NegativePrice(token, address(feed[token]));
+
+        return (
+            (uint(answer)*1e18)/getEthPrice()
+        );
+    }
 ```
 
-## Team  
--
-
-## Sherlock  
-- 
+The `validPeriod` can be based on the `Heartbeat` of the feed.
