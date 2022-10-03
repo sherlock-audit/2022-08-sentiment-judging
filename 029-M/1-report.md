@@ -1,23 +1,59 @@
-Lambda
-# BalancerController: Can be misused to get non-approved tokens into the account
+Bahurum
+# Can register a non-allowed collateral as collateral
 
 ## Summary
-In `BalancerController`s `canExit`, it is not checked if the `tokensIn` are allowed.
+Some external interactions send tokens to the account, and the token address is not checked before being registered as a collateral for the account. This allows using an arbitrary token as a collateral as long as there is a corresponding oracle. 
 
 ## Vulnerability Detail
-When exiting a Balancer pool, it is possible to get tokens that are not allowed (i.e., where `controllerFacade.isTokenAllowed` would return false). There are two ways how this can happen:
-1.) The pool was joined by the controller. In this case, the disallowed assets would have been in the account previously (otherwise, joining the pool is not possible). But this is possible, the user could have simply transferred those assets (via an ERC20 transfer) to his account.
-2.) The user joined the pool outside of the controller (with an EOA) and transferred the pool token (via an ERC20 transfer) to his account.
+In the following controllers, at the line referenced
+
+[UniV2Controller.sol #L189](https://github.com/sentimentxyz/controller/blob/a2ddbcc00f361f733352d9c51457b4ebb999c8ae/src/uniswap/UniV2Controller.sol#L189)  
+[AaveV2Controller.sol #L91](https://github.com/sentimentxyz/controller/blob/a2ddbcc00f361f733352d9c51457b4ebb999c8ae/src/aave/AaveV2Controller.sol#L91)  
+[AaveV3Controller.sol #L79](https://github.com/sentimentxyz/controller/blob/a2ddbcc00f361f733352d9c51457b4ebb999c8ae/src/aave/AaveV3Controller.sol#L79)  
+[BalancerController.sol#L137](https://github.com/sentimentxyz/controller/blob/a2ddbcc00f361f733352d9c51457b4ebb999c8ae/src/balancer/BalancerController.sol#L137)  
+
+There is an operation with a return value that can be an arbitrary token. No check is made to verify that the tokens in `tokensIn` are activated in `controllerFacade.isTokenAllowed`. No check is made either in `AccountManager.exec()` when calling `_updateTokensIn()` ([AccountManager.sol#L305](https://github.com/sentimentxyz/protocol/blob/4e45871e4540df0f189f6c89deb8d34f24930120/src/core/AccountManager.sol#L305)), so the tokens are added as a collateral as long as the oracle for the token in `OracleFacade` is active.
+
+This can be clarified with an example using `UniV2Controller.sol`:  
+1. Admin sets the oracle for token XYZ, but does not activate yet the token in `controllerFacade.isTokenAllowed` or in `AccountManager.isCollateralAllowed` waiting to clear some security concerns with the token (vulnerabilities, high volatility, low liquidity, ...)
+2. Attacker opens an account
+3. Attacker provides liquidity to XYZ / ETH pool on UniswapV2
+4. Attacker transfers the LP to the account
+5. Attacker removes liquidity from the UniswapV2 pool through the account by calling `AccountManager.exec`. Note that there is no check to control whether tokens exiting the account are allowed ([UniV2Controller.sol#L175-L190](https://github.com/sentimentxyz/controller/blob/a2ddbcc00f361f733352d9c51457b4ebb999c8ae/src/uniswap/UniV2Controller.sol#L175-L190)). No checks are performed on tokens sent from the pool to the account, so account receives WETH + XYZ and also XYZ is registered as an account collateral ([AccountManager.sol#L305](https://github.com/sentimentxyz/protocol/blob/4e45871e4540df0f189f6c89deb8d34f24930120/src/core/AccountManager.sol#L305)). An oracle was set for XYZ so the call to `riskEngine.isAccountHealthy(account)`([AccountManager.sol#L310](https://github.com/sentimentxyz/protocol/blob/4e45871e4540df0f189f6c89deb8d34f24930120/src/core/AccountManager.sol#L310)) does not revert and the transaction succeeds.
+6. Attacker can take advantage of the aforementioned security concerns to manipulate the price of XYZ, inflate his collateral balance and drain funds from the protocol.
+
+The same behaviour can be reproduced with the other integrations listed above by transfering LP tokens of that particular protocol directly to an account and then removing liquidity through `AccountManager.exec()` to get the pair tokens registered into the account as collateral.
 
 ## Impact
-Because those tokens are added to the account's asset, it can be exploited to have tokens as collateral that are not allowed. For instance, let's say the protocol disallows SHIB because it is too volatile and therefore too risky. Using the method described above, a user could end up in a situation where SHIB is added to his assets and therefore considered in the collateral calculations. This puts the protocols assets at risk, because all tokens (that have a Balancer pool) can be added as collateral and therefore create account states that are too risky.
+See point 6. of section above.
 
 ## Code Snippet
-https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/controller/src/balancer/BalancerController.sol#L130
+[UniV2Controller.sol #L189](https://github.com/sentimentxyz/controller/blob/a2ddbcc00f361f733352d9c51457b4ebb999c8ae/src/uniswap/UniV2Controller.sol#L189)  
+[AaveV2Controller.sol #L91](https://github.com/sentimentxyz/controller/blob/a2ddbcc00f361f733352d9c51457b4ebb999c8ae/src/aave/AaveV2Controller.sol#L91)  
+[AaveV3Controller.sol #L79](https://github.com/sentimentxyz/controller/blob/a2ddbcc00f361f733352d9c51457b4ebb999c8ae/src/aave/AaveV3Controller.sol#L79)  
+[BalancerController.sol#L137](https://github.com/sentimentxyz/controller/blob/a2ddbcc00f361f733352d9c51457b4ebb999c8ae/src/balancer/BalancerController.sol#L137)  
+[AccountManager.sol#L347](https://github.com/sentimentxyz/protocol/blob/4e45871e4540df0f189f6c89deb8d34f24930120/src/core/AccountManager.sol#L347)
 
 ## Tool used
 
 Manual Review
 
 ## Recommendation
-One option would be to check `controllerFacade.isTokenAllowed` for all returned tokens. A better option IMO would be to change the design and drop all of this `isTokenAllowed` checks in the controllers. Instead, the `AccountManager` could check `isCollateralAllowed` for all returned tokens. Like that, the tokens would only need to be white-listed in one place and the solution would be less error-prone.
+
+Check if tokens are allowed as collateral in `_updateTokensIn`  ([AccountManager.sol#L347-L355](https://github.com/sentimentxyz/protocol/blob/4e45871e4540df0f189f6c89deb8d34f24930120/src/core/AccountManager.sol#L347-L355))
+
+```diff
+    function _updateTokensIn(address account, address[] memory tokensIn)
+        internal
+    {
+        uint tokensInLen = tokensIn.length;
+        for(uint i; i < tokensInLen; ++i) {
++           if (!isCollateralAllowed[tokensIn[i]])
++               revert Errors.CollateralTypeRestricted();
+            if (IAccount(account).hasAsset(tokensIn[i]) == false)
+                IAccount(account).addAsset(tokensIn[i]);
+        }
+    }
+```
+
+This way no asset can be added as collateral without being allowed.

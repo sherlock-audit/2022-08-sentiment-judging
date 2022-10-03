@@ -1,22 +1,27 @@
-Lambda
-# AccountManager: Fee-On-Transfer tokens not supported
+IllIllI
+# Balances of rebasing tokens aren't properly tracked
 
 ## Summary
-Fee-on-transfer tokens lead to problems in `AccountManager`.
+Rebasing tokens are tokens where `balanceOf()` returns larger amounts over time, due to the addition of interest to each account, or due to airdrops
 
 ## Vulnerability Detail
-`AccountManager` assumes when liquidating / repaying debt (see code snippets) that the transferred amount equals to the received amount, which is not the case for fee-on-transfer tokens.
+Sentiment doesn't properly track balance changes while rebasing tokens are in the borrower's account
 
 ## Impact
-When a fee-on-transfer token is used, the debt is reduced by the whole amount, although only part of it is actually transferred to the `LToken`. This destroys the accounting of the `LToken` and is bad for the token holders.
+The lender will miss out on gains that should have accrued to them while the asset was lent out. While market-based price corrections may be able to handle interest that is accrued to everyone, market approaches won't work when only subsets of token addresses are given rewards, e.g. an airdrop based on a snapshot of activity that happened prior to the token being lent.
 
 ## Code Snippet
-https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/protocol/src/core/AccountManager.sol#L380
-https://github.com/sherlock-audit/2022-08-sentiment-OpenCoreCH/blob/015efc78e890daa1cf640d92125608f22cf167ed/protocol/src/core/AccountManager.sol#L236
+Lending tracks shares of the LToken:
+https://github.com/sherlock-audit/2022-08-sentiment-IllIllI000/blob/2e25699040ed87a9af62f2b637eafcc6b0b59cc5/protocol/src/tokens/LToken.sol#L140-L143
 
+But repayment assumes that shares are equal to the same amount, regardless of which address held them, which is not true for airdrops:
+https://github.com/sherlock-audit/2022-08-sentiment-IllIllI000/blob/2e25699040ed87a9af62f2b637eafcc6b0b59cc5/protocol/src/tokens/LToken.sol#L160-L163
+
+Rebasing tokens are supported, since Aave is a rebasing token:
+https://github.com/sherlock-audit/2022-08-sentiment-IllIllI000/blob/9ccbe41937173b03f6ea657178eb2efeb3790478/controller/src/aave/AaveEthController.sol#L28
 ## Tool used
 
 Manual Review
 
 ## Recommendation
-The actual amount that was transferred could be checked. However, not supporting fee-on-transfer tokens is also completely fine in my opinion. Maybe that is already intended, but I did not find anything and wanted to make sure that you are aware of the issues with these tokens.
+Adjust share amounts when the account balance doesn't match the share conversion calculation when taking into account gains made by the borrower
