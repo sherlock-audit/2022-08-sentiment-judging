@@ -23,9 +23,9 @@ $$
 
 Given:
 
--   1.0 AMPL worth 1.14 USD, `feed[ampl].decimals()` == 18, answer_ampl = 1140608758261546000 [Source: `feed[ampl]`](https://etherscan.io/address/0xe20CA8D7546932360e37E9D72c1a47334af57706#readContract)
+-   1.0 AMPL worth 1.14 USD, `feed[ampl].decimals() == 18`, `answer_ampl = 1140608758261546000` [Source: `feed[ampl]`](https://etherscan.io/address/0xe20CA8D7546932360e37E9D72c1a47334af57706#readContract)
 
--   1.0 ETH worth 1588.11 USD, `ethUsdPriceFeed.decimals()` == 8, answer_eth = 158811562094 [Source: `ethUsdPriceFeed`](https://etherscan.io/address/0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419#readContract)
+-   1.0 ETH worth 1588.11 USD, `ethUsdPriceFeed.decimals() == 8`, `answer_eth = 158811562094` [Source: `ethUsdPriceFeed`](https://etherscan.io/address/0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419#readContract)
 
 `chainlinkOracle.getPrice(AMPL)` will return ~7.18m (eth):
 
