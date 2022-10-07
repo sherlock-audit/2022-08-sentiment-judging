@@ -3,7 +3,7 @@
 Source: https://github.com/sherlock-audit/2022-08-sentiment-judging/tree/main/004-H 
 
 ## Found by 
-kankodu, JohnSmith, PwnPatrol, WATCHPUG, berndartmueller, hyh, __141345__, IllIllI, TomJ
+kankodu, JohnSmith, PwnPatrol, WATCHPUG, berndartmueller, hyh, \_\_141345\_\_, IllIllI, TomJ
 
 ## Summary
 
@@ -852,7 +852,7 @@ function canRemoveLiquidity(address target, bytes calldata data)
 Source: https://github.com/sherlock-audit/2022-08-sentiment-judging/tree/main/002-M 
 
 ## Found by 
-defsec, icedpeachtea, oyc_109, Lambda, 0xNineDec, Avci, ladboy233, JohnSmith, jonatascm, Ruhum, csanuragjain, PwnPatrol, WATCHPUG, 0xNazgul, xiaoming90, 0x52, 0xf15ers, ellahi, pashov, rbserver, GalloDaSballo, Chom, __141345__, cccz, devtooligan, Bahurum, HonorLt, GimelSec, Dravee, Olivierdem
+defsec, icedpeachtea, oyc\_109, Lambda, 0xNineDec, Avci, ladboy233, JohnSmith, jonatascm, Ruhum, csanuragjain, PwnPatrol, WATCHPUG, 0xNazgul, xiaoming90, 0x52, 0xf15ers, ellahi, pashov, rbserver, GalloDaSballo, Chom, \_\_141345\_\_, cccz, devtooligan, Bahurum, HonorLt, GimelSec, Dravee, Olivierdem
 
 ## Summary
 
@@ -1014,7 +1014,7 @@ This way no asset can be added as collateral without being allowed.
 Source: https://github.com/sherlock-audit/2022-08-sentiment-judging/tree/main/033-M 
 
 ## Found by 
-panprog, csanuragjain, Czar102, carrot, PwnPatrol, Lambda, kirk-baird, berndartmueller, rbserver, Chom, __141345__
+panprog, csanuragjain, Czar102, carrot, PwnPatrol, Lambda, kirk-baird, berndartmueller, rbserver, Chom, \_\_141345\_\_
 
 ## Summary
 When the transfer of one asset fails, liquidations become impossible.
