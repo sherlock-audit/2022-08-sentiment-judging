@@ -1,7 +1,9 @@
 # Issue H-1: A malicious early user/attacker can manipulate the LToken's pricePerShare to take an unfair share of future users' deposits 
+
 Source: https://github.com/sherlock-audit/2022-08-sentiment-judging/tree/main/004-H 
+
 ## Found by 
-kankodu, JohnSmith, PwnPatrol, WATCHPUG, berndartmueller, hyh, \_\_141345\_\_, IllIllI, TomJ
+kankodu, JohnSmith, PwnPatrol, WATCHPUG, berndartmueller, hyh, __141345__, IllIllI, TomJ
 
 ## Summary
 
@@ -123,9 +125,11 @@ function mint(uint256 shares, address receiver) public virtual returns (uint256 
 ```
 
 # Issue H-2: `ChainlinkOracle.sol#getPrice()` The price will be wrong when the token's USD price feed's `decimals != 8` 
+
 Source: https://github.com/sherlock-audit/2022-08-sentiment-judging/tree/main/019-H 
+
 ## Found by 
-Lambda, CRYP70, WATCHPUG, berndartmueller, pashov, IllIllI, Bahurum, sorrynotsorry
+Lambda, csanuragjain, CRYP70, WATCHPUG, berndartmueller, pashov, IllIllI, Bahurum, sorrynotsorry
 
 ## Summary
 
@@ -241,7 +245,9 @@ function setFeed(
 ```
 
 # Issue H-3: CTokenOracle.sol#getCErc20Price contains critical math error 
+
 Source: https://github.com/sherlock-audit/2022-08-sentiment-judging/tree/main/021-H 
+
 ## Found by 
 0x52
 
@@ -289,7 +295,9 @@ Fix the math error by changing L74:
        
 
 # Issue H-4: `ERC4626Oracle` Price will be wrong when the ERC4626's `decimals` is different from the underlying token’s decimals  
+
 Source: https://github.com/sherlock-audit/2022-08-sentiment-judging/tree/main/025-H 
+
 ## Found by 
 Lambda, JohnSmith, WATCHPUG, 0x52, berndartmueller, Bahurum
 
@@ -349,7 +357,9 @@ Manual Review
 ```
 
 # Issue H-5: `UniV2LPOracle` will malfunction if token0 or token1's `decimals != 18` 
+
 Source: https://github.com/sherlock-audit/2022-08-sentiment-judging/tree/main/026-H 
+
 ## Found by 
 Lambda, WATCHPUG, 0x52, hyh
 
@@ -517,7 +527,9 @@ Manual Review
 Consider normalizing r0 and r1 to 18 decimals before using them in the formula.
 
 # Issue H-6: `updateState()` should be called in `depositEth()` and `redeemEth()` 
+
 Source: https://github.com/sherlock-audit/2022-08-sentiment-judging/tree/main/085-H 
+
 ## Found by 
 Lambda, Ruhum, bytehat, WATCHPUG, xiaoming90, pashov, cccz, GimelSec
 
@@ -717,7 +729,9 @@ Manual Review
 ```
 
 # Issue H-7: Tokens received from Curve's `remove_liquidity()` should be added to the assets list even if `_min_amounts` are set to `0` 
+
 Source: https://github.com/sherlock-audit/2022-08-sentiment-judging/tree/main/267-H 
+
 ## Found by 
 WATCHPUG
 
@@ -834,9 +848,11 @@ function canRemoveLiquidity(address target, bytes calldata data)
 ```
 
 # Issue M-1: Lack of price freshness check in `ChainlinkOracle.sol#getPrice()` allows a stale price to be used 
+
 Source: https://github.com/sherlock-audit/2022-08-sentiment-judging/tree/main/002-M 
+
 ## Found by 
-defsec, icedpeachtea, oyc\_109, Lambda, 0xNineDec, Avci, ladboy233, JohnSmith, jonatascm, Ruhum, csanuragjain, PwnPatrol, WATCHPUG, 0xNazgul, xiaoming90, 0x52, 0xf15ers, ellahi, pashov, rbserver, GalloDaSballo, Chom, \_\_141345\_\_, cccz, devtooligan, Bahurum, HonorLt, GimelSec, Dravee, Olivierdem
+defsec, icedpeachtea, oyc_109, Lambda, 0xNineDec, Avci, ladboy233, JohnSmith, jonatascm, Ruhum, csanuragjain, PwnPatrol, WATCHPUG, 0xNazgul, xiaoming90, 0x52, 0xf15ers, ellahi, pashov, rbserver, GalloDaSballo, Chom, __141345__, cccz, devtooligan, Bahurum, HonorLt, GimelSec, Dravee, Olivierdem
 
 ## Summary
 
@@ -930,7 +946,9 @@ Consider adding the missing freshness check for stale price:
 The `validPeriod` can be based on the `Heartbeat` of the feed.
 
 # Issue M-2: Can register a non-allowed collateral as collateral 
+
 Source: https://github.com/sherlock-audit/2022-08-sentiment-judging/tree/main/029-M 
+
 ## Found by 
 Lambda, Bahurum, kirk-baird, bin2chen, xiaoming90, GalloDaSballo
 
@@ -992,9 +1010,11 @@ Check if tokens are allowed as collateral in `_updateTokensIn`  ([AccountManager
 This way no asset can be added as collateral without being allowed.
 
 # Issue M-3: AccountManager: Liquidations not possible when transfer fails 
+
 Source: https://github.com/sherlock-audit/2022-08-sentiment-judging/tree/main/033-M 
+
 ## Found by 
-panprog, csanuragjain, Czar102, carrot, PwnPatrol, Lambda, kirk-baird, berndartmueller, rbserver, Chom, \_\_141345\_\_
+panprog, csanuragjain, Czar102, carrot, PwnPatrol, Lambda, kirk-baird, berndartmueller, rbserver, Chom, __141345__
 
 ## Summary
 When the transfer of one asset fails, liquidations become impossible.
@@ -1022,7 +1042,9 @@ Manual Review
 Catch reversions for the transfer and skip this asset (but it could be kept in the assets list to allow retries later on).
 
 # Issue M-4: Accounts with ETH loans can not be liquidated if LEther's underlying is set to `address(0)` 
+
 Source: https://github.com/sherlock-audit/2022-08-sentiment-judging/tree/main/034-M 
+
 ## Found by 
 Lambda, WATCHPUG, hansfriese, rbserver, HonorLt, 0xc0ffEE
 
@@ -1126,7 +1148,9 @@ Manual Review
 2. Consider disallowing adding `address(0)` as `underlying` in `setLToken()`.
 
 # Issue M-5: Balances of rebasing tokens aren't properly tracked 
+
 Source: https://github.com/sherlock-audit/2022-08-sentiment-judging/tree/main/035-M 
+
 ## Found by 
 Lambda, JohnSmith, PwnPatrol, IllIllI, xiaoming90, ellahi, bytehat
 
@@ -1156,7 +1180,9 @@ Manual Review
 Adjust share amounts when the account balance doesn't match the share conversion calculation when taking into account gains made by the borrower
 
 # Issue M-6: If oracle is set for ERC777 token, re-entrancy is possible to steal all LToken funds 
+
 Source: https://github.com/sherlock-audit/2022-08-sentiment-judging/tree/main/076-M 
+
 ## Found by 
 panprog, xiaoming90, Tutturu, devtooligan, Bahurum, Czar102
 
@@ -1225,7 +1251,9 @@ Manual Review
 2. Add correct token checks to uniswap v2 controller.
 
 # Issue M-7: Uniswap contract added to controller doesn't match with function signatures 
+
 Source: https://github.com/sherlock-audit/2022-08-sentiment-judging/tree/main/092-M 
+
 ## Found by 
 PwnPatrol
 
@@ -1278,7 +1306,9 @@ Use Router 2 (address: 0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45) when calling 
 Alternatively, add the extra function signatures in `UniV3Controller.sol` so the controller is able to work on either Router.
 
 # Issue M-8: Missing revert keyword 
+
 Source: https://github.com/sherlock-audit/2022-08-sentiment-judging/tree/main/097-M 
+
 ## Found by 
 PwnPatrol
 
@@ -1330,7 +1360,9 @@ if (!isContract(target)) revert Errors.AddressNotContract;
 ```
 
 # Issue M-9: Protocol Reserve Within A LToken Vault Can Be Lent Out 
+
 Source: https://github.com/sherlock-audit/2022-08-sentiment-judging/tree/main/122-M 
+
 ## Found by 
 xiaoming90
 
@@ -1439,7 +1471,9 @@ function lendTo(address account, uint amt)
 ```
 
 # Issue M-10: ERC4626Oracle Vulnerable To Price Manipulation 
+
 Source: https://github.com/sherlock-audit/2022-08-sentiment-judging/tree/main/133-M 
+
 ## Found by 
 xiaoming90, IllIllI
 
@@ -1502,7 +1536,9 @@ The attacker could perform price manipulation to make the apparent value of an a
 Avoid using `previewRedeem` function to calculate the price of the LP token of an ERC4626 vault. Consider implementing TWAP so that the price cannot be inflated or deflated within a single block/transaction or within a short period of time.
 
 # Issue M-11: Delisted assets can still be deposited and borrowed against by accounts that already have them  
+
 Source: https://github.com/sherlock-audit/2022-08-sentiment-judging/tree/main/154-M 
+
 ## Found by 
 0x52, Kumpa, devtooligan, WATCHPUG
 
@@ -1531,7 +1567,9 @@ Manual Review
 Calculations for account health should be split into two distinct categories. When calculating the health of a position post-action, unsupported assets should not be considered in the total value of the account. When calculating the health of a position for liquidation, all assets on the asset list should be considered. This prevent any new borrowing against a delisted asset but doesn't risk all affected users being liquidated unfairly.
 
 # Issue M-12: M-03 YTokenOracle doesn't account for losses when pricing the yToken 
+
 Source: https://github.com/sherlock-audit/2022-08-sentiment-judging/tree/main/204-M 
+
 ## Found by 
 GalloDaSballo
 
@@ -1570,7 +1608,9 @@ Refactor `getPrice(address)` to `getPrice(address, amount)` and pass in the exac
 Alternatively cap the Yearn tokens to a massively small LTV (35% is probably as high as you should go without simming on a token by token basis)
 
 # Issue M-13: M-05 Yearn `withdraw(uint)` selector may backfire 
+
 Source: https://github.com/sherlock-audit/2022-08-sentiment-judging/tree/main/208-M 
+
 ## Found by 
 GalloDaSballo
 
@@ -1606,7 +1646,9 @@ Manual Review
 Consider adding support for a more complete withdraw that allows to change the `maxLoss` parameter
 
 # Issue M-14: `Reserves` should not be considered part of the available liquidity while calculating the interest rate 
+
 Source: https://github.com/sherlock-audit/2022-08-sentiment-judging/tree/main/266-M 
+
 ## Found by 
 WATCHPUG
 
