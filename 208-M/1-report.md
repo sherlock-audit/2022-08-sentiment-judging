@@ -31,3 +31,9 @@ Manual Review
 ## Recommendation
 
 Consider adding support for a more complete withdraw that allows to change the `maxLoss` parameter
+
+## Sentiment Team
+Not fixing since we don't plan to launch with Yearn. We are okay with not including this contract in the coverage scope since it won't be deployed.
+
+## Lead Senior Watson
+Acknowledged.
