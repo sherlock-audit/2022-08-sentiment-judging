@@ -34,3 +34,9 @@ Manual Review
 Refactor `getPrice(address)` to `getPrice(address, amount)` and pass in the exact amount to ensure it can be liquidated fully without a loss
 
 Alternatively cap the Yearn tokens to a massively small LTV (35% is probably as high as you should go without simming on a token by token basis)
+
+## Sentiment Team
+Not fixing since we don't plan to launch with Yearn. We are okay with not including this contract in the coverage scope since it won't be deployed.
+
+## Lead Senior Watson
+Acknowledged. 
