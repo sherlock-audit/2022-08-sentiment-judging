@@ -55,3 +55,8 @@ Manual Review
         );
     }
 ```
+## Sentiment Team
+Fixed as recommended. PR [here](https://github.com/sentimentxyz/oracle/pull/34).
+
+## Lead Senior Watson
+Confirmed fix. 
