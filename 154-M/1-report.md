@@ -24,3 +24,9 @@ Manual Review
 ## Recommendation
 
 Calculations for account health should be split into two distinct categories. When calculating the health of a position post-action, unsupported assets should not be considered in the total value of the account. When calculating the health of a position for liquidation, all assets on the asset list should be considered. This prevent any new borrowing against a delisted asset but doesn't risk all affected users being liquidated unfairly.
+
+## Sentiment Team
+Fixed as recommended. PR [here](https://github.com/sentimentxyz/oracle/pull/44).
+
+## Lead Senior Watson
+Confirmed fix. 
