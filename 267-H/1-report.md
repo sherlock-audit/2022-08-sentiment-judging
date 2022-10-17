@@ -112,3 +112,8 @@ function canRemoveLiquidity(address target, bytes calldata data)
     return (true, tokensIn, tokensOut);
 }
 ```
+## Sentiment Team
+Fixed as recommended. PR [here](https://github.com/sentimentxyz/controller/pull/39).
+
+## Lead Senior Watson
+Confirmed fix. 
