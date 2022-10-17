@@ -64,3 +64,9 @@ Manual Review
 
 1. Add ReEntrancy guard from openzeppelin to main entry functions, mostly all functions in `AccountManager`.
 2. Add correct token checks to uniswap v2 controller.
+
+## Sentiment Team
+We found an additional issue reported by a community member which was not a real exploit but exploited a vulnerability in the logic. Would request the auditors to take a look. PR [here](https://github.com/sentimentxyz/protocol/pull/237).
+
+## Lead Senior Watson
+Fixed. 
