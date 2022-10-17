@@ -99,3 +99,9 @@ Manual Review
 
 1. Consider removing the misleading logic in `AccountManager#settle()` and `RiskEngine#_valueInWei()` that handles `address(0)` as an asset;
 2. Consider disallowing adding `address(0)` as `underlying` in `setLToken()`.
+
+## Sentiment Team
+Fixed as recommended. PR [here](https://github.com/sentimentxyz/protocol/pull/228).
+
+## Lead Senior Watson
+Confirmed fix. 
