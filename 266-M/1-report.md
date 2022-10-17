@@ -121,3 +121,19 @@ function getRateFactor() internal view returns (uint) {
         );
 }
 ```
+
+## Sentiment Team
+Removed reserves from LToken and added an alternate mechanism to collect direct fees.
+
+## Lead Senior Watson
+originationFee may result in the borrower account becoming liquidatable immediately (aka WP-M2).
+
+## Sentiment Team
+Fixed as recommended. PR [here](https://github.com/sentimentxyz/protocol/pull/236). 
+
+## Lead Senior Watson
+riskEngine.isBorrowAllowed should be removed as it's no longer needed.
+
+## Sentiment Team
+Pushed a commit to remove the redundant call to riskEngine. PR [here](https://github.com/sentimentxyz/protocol/pull/236/commits/bfc445b02784f8130181641ce0054382b4cc3ec5
+). 
