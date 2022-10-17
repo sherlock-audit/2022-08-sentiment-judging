@@ -163,3 +163,9 @@ Manual Review
 ## Recommendation
 
 Consider normalizing r0 and r1 to 18 decimals before using them in the formula.
+
+## Sentiment Team
+Fixed as recommended. PRs [here](https://github.com/sentimentxyz/oracle/pull/35) and [here](https://github.com/sentimentxyz/oracle/pull/41).
+
+## Lead Senior Watson
+Confirmed fix. 
