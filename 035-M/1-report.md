@@ -25,3 +25,9 @@ Manual Review
 
 ## Recommendation
 Adjust share amounts when the account balance doesn't match the share conversion calculation when taking into account gains made by the borrower
+
+## Sentiment Team
+We'll make sure to not interact with fee-on-transfer tokens. This can be ensured by the admins.
+
+## Lead Senior Watson
+Note: The admins should not add rebasing/fee-on-transfer tokens to any allowed lists.
