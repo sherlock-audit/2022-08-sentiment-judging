@@ -25,3 +25,9 @@ Manual Review
 
 ## Recommendation
 Catch reversions for the transfer and skip this asset (but it could be kept in the assets list to allow retries later on).
+
+## Sentiment Team
+Fixed as recommended. PR [here](https://github.com/sentimentxyz/protocol/pull/231).
+
+## Lead Senior Watson
+Confirmed fix. 
