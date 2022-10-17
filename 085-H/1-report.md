@@ -195,3 +195,8 @@ Manual Review
         msg.sender.safeTransferEth(assets);
     }
 ```
+## Sentiment Team
+Fixed as recommended. PR [here](https://github.com/sentimentxyz/protocol/pull/230).
+
+## Lead Senior Watson
+Confirmed fix. 
