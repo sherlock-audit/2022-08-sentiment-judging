@@ -47,3 +47,9 @@ Add missing `revert` keyword to L70 of Helpers.sol.
 ```solidity
 if (!isContract(target)) revert Errors.AddressNotContract;
 ```
+
+## Sentiment Team
+Fixed as recommended. PR [here](https://github.com/sentimentxyz/protocol/pull/227).
+
+## Lead Senior Watson
+Confirmed fix. 
