@@ -43,3 +43,8 @@ Fix the math error by changing L74:
     .mulDivDown(1e8 , 10 ** IERC20(underlying).decimals())
     .mulWadDown(oracle.getPrice(underlying));
        
+## Sentiment Team
+Fixed as recommended. PR [here](https://github.com/sentimentxyz/oracle/pull/43).
+
+## Lead Senior Watson
+Confirmed fix. 
