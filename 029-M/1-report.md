@@ -57,3 +57,14 @@ Check if tokens are allowed as collateral in `_updateTokensIn`  ([AccountManager
 ```
 
 This way no asset can be added as collateral without being allowed.
+
+## Sentiment Team
+Fixed as recommended. PR [here](https://github.com/sentimentxyz/controller/pull/40) and [here](https://github.com/sentimentxyz/controller/pull/43).
+
+## Lead Senior Watson
+Confirmed fix. If there are non-whitelisted tokens in the tokensIn list from a controller, it seems like the system should not reject the call, but not to add these tokens (ignore these tokens).
+
+This issue is more obvious for the case of claim rewards from 3rd party protocols, which may include non-whitelisted tokens, but that doesn't mean it should not be allowed to claim these rewards.
+
+## Sentiment Team
+We intend to track rewards as well and hence will be required to add them in the tokensIn list, all rewards will be whitelisted and only those integrations will be enabled.
