@@ -104,3 +104,9 @@ function lendTo(address account, uint amt)
     return isFirstBorrow;
 }
 ```
+
+## Sentiment Team
+Fixed as recommended. PR [missing].
+
+## Lead Senior Watson
+Confirmed fix. 
