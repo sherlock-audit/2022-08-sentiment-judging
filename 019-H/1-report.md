@@ -113,3 +113,8 @@ function setFeed(
     emit UpdateFeed(token, address(_feed));
 }
 ```
+## Sentiment Team
+Our chainlink oracles use token/usd feed for all the assets we support via chainlink, all the token/usd chainlink feeds have 8 decimals and hence will not lead to any issue with the final price calculation. PR [here](https://github.com/sentimentxyz/oracle/pull/37).
+
+## Lead Senior Watson
+Confirmed fix. 
