@@ -119,3 +119,8 @@ function mint(uint256 shares, address receiver) public virtual returns (uint256 
     emit Deposit(msg.sender, receiver, assets, shares);
 }
 ```
+## Sentiment Team
+Fixed as recommened but instead of sending these shares to the DAO, we burn them. PR [here](https://github.com/sentimentxyz/protocol/pull/232).
+
+## WatchPug
+Confirmed fix. 
