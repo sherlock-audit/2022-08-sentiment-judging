@@ -91,3 +91,9 @@ Consider adding the missing freshness check for stale price:
 ```
 
 The `validPeriod` can be based on the `Heartbeat` of the feed.
+
+## Sentiment Team
+Fixed as recommended. PR [here](https://github.com/sentimentxyz/oracle/pull/38)
+
+## Lead Senior Watson
+Confirmed fix. 
