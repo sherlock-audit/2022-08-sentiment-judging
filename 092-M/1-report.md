@@ -48,3 +48,9 @@ Manual Review
 Use Router 2 (address: 0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45) when calling `controllerFacade.updateController()` to connect UniV3Controller to the correct router.
 
 Alternatively, add the extra function signatures in `UniV3Controller.sol` so the controller is able to work on either Router.
+
+## Sentiment Team
+Fixed as recommended. PR [here](https://github.com/sentimentxyz/protocol/pull/229).
+
+## Lead Senior Watson
+Confirmed fix. 
