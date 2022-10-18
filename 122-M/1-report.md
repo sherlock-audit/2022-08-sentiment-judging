@@ -106,7 +106,7 @@ function lendTo(address account, uint amt)
 ```
 
 ## Sentiment Team
-Fixed as recommended. PR [missing].
+We removed reserves completely in this [PR](https://github.com/sentimentxyz/protocol/pull/236).
 
 ## Lead Senior Watson
 Confirmed fix. 

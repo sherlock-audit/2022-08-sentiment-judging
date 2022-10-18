@@ -67,4 +67,4 @@ Confirmed fix. If there are non-whitelisted tokens in the tokensIn list from a c
 This issue is more obvious for the case of claim rewards from 3rd party protocols, which may include non-whitelisted tokens, but that doesn't mean it should not be allowed to claim these rewards.
 
 ## Sentiment Team
-We intend to track rewards as well and hence will be required to add them in the tokensIn list, all rewards will be whitelisted and only those integrations will be enabled.
+We intend to track rewards as well and hence will be required to add them in the tokensIn list, all rewards will be whitelisted and only those integrations will be enabled. For rewards that we don't want to use as collateral in the system, we plan to add them to the assets and point them to the zero oracle.
