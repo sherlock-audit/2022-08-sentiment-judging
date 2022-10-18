@@ -1,5 +1,4 @@
 WATCHPUG
-
 # `CurveLPStaking` Curve's gauge rewards cannot be claimed
 
 ## Summary

@@ -1,5 +1,4 @@
 WATCHPUG
-
 # LToken's implmentation is not fully up to EIP-4626's specification
 
 ## Summary

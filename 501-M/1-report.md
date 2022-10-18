@@ -1,5 +1,4 @@
 WATCHPUG
-
 # `originationFee` may result in the borrower account becoming liquidatable immediately
 
 ## Summary
