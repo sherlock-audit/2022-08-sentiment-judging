@@ -120,7 +120,7 @@ function mint(uint256 shares, address receiver) public virtual returns (uint256 
 }
 ```
 ## Sentiment Team
-Fixed as recommened but instead of sending these shares to the DAO, we burn them. PR [here](https://github.com/sentimentxyz/protocol/pull/232).
+Fixed as recommended but instead of sending these shares to the DAO, we burn them. PR [here](https://github.com/sentimentxyz/protocol/pull/232).
 
-## WatchPug
+## Lead Senior Watson
 Confirmed fix. 
