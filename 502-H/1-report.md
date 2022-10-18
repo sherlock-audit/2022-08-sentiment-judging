@@ -1,14 +1,14 @@
 WATCHPUG
 
+# `CurveLPStaking` Curve's gauge rewards cannot be claimed
+
+## Summary
+
 Note: This issue is a part of the extra scope added by Sentiment AFTER the audit contest. This scope was only reviewed by WatchPug and relates to these three PRs:
 
 1. [Lending deposit cap](https://github.com/sentimentxyz/protocol/pull/234)
 2. [Fee accrual modification](https://github.com/sentimentxyz/protocol/pull/233)
 3. [CRV staking](https://github.com/sentimentxyz/controller/pull/41)
-
-# `CurveLPStaking` Curve's gauge rewards cannot be claimed
-
-## Summary
 
 Curve's gauge rewards cannot be claimed.
 

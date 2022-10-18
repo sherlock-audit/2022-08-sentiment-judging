@@ -1,14 +1,14 @@
 WATCHPUG
 
+# LToken's implmentation is not fully up to EIP-4626's specification
+
+## Summary
+
 Note: This issue is a part of the extra scope added by Sentiment AFTER the audit contest. This scope was only reviewed by WatchPug and relates to these three PRs:
 
 1. [Lending deposit cap](https://github.com/sentimentxyz/protocol/pull/234)
 2. [Fee accrual modification](https://github.com/sentimentxyz/protocol/pull/233)
 3. [CRV staking](https://github.com/sentimentxyz/controller/pull/41)
-
-# LToken's implmentation is not fully up to EIP-4626's specification
-
-## Summary
 
 LToken's implmentation is not fully up to EIP-4626's specification. This issue is would actually be considered a Low issue if it were a part of a Sherlock contest. 
 
