@@ -1,7 +1,5 @@
 # Issue H-1: A malicious early user/attacker can manipulate the LToken's pricePerShare to take an unfair share of future users' deposits 
-
 Source: https://github.com/sherlock-audit/2022-08-sentiment-judging/tree/main/004-H 
-
 ## Found by 
 kankodu, JohnSmith, PwnPatrol, WATCHPUG, berndartmueller, hyh, \_\_141345\_\_, IllIllI, TomJ
 
@@ -123,11 +121,14 @@ function mint(uint256 shares, address receiver) public virtual returns (uint256 
     emit Deposit(msg.sender, receiver, assets, shares);
 }
 ```
+## Sentiment Team
+Fixed as recommended but instead of sending these shares to the DAO, we burn them. PR [here](https://github.com/sentimentxyz/protocol/pull/232).
+
+## Lead Senior Watson
+Confirmed fix. 
 
 # Issue H-2: `ChainlinkOracle.sol#getPrice()` The price will be wrong when the token's USD price feed's `decimals != 8` 
-
 Source: https://github.com/sherlock-audit/2022-08-sentiment-judging/tree/main/019-H 
-
 ## Found by 
 Lambda, csanuragjain, CRYP70, WATCHPUG, berndartmueller, pashov, IllIllI, Bahurum, sorrynotsorry
 
@@ -243,11 +244,14 @@ function setFeed(
     emit UpdateFeed(token, address(_feed));
 }
 ```
+## Sentiment Team
+Our chainlink oracles use token/usd feed for all the assets we support via chainlink, all the token/usd chainlink feeds have 8 decimals and hence will not lead to any issue with the final price calculation. PR [here](https://github.com/sentimentxyz/oracle/pull/37).
+
+## Lead Senior Watson
+Confirmed fix. 
 
 # Issue H-3: CTokenOracle.sol#getCErc20Price contains critical math error 
-
 Source: https://github.com/sherlock-audit/2022-08-sentiment-judging/tree/main/021-H 
-
 ## Found by 
 0x52
 
@@ -293,11 +297,14 @@ Fix the math error by changing L74:
     .mulDivDown(1e8 , 10 ** IERC20(underlying).decimals())
     .mulWadDown(oracle.getPrice(underlying));
        
+## Sentiment Team
+Fixed as recommended. PR [here](https://github.com/sentimentxyz/oracle/pull/43).
+
+## Lead Senior Watson
+Confirmed fix. 
 
 # Issue H-4: `ERC4626Oracle` Price will be wrong when the ERC4626's `decimals` is different from the underlying token’s decimals  
-
 Source: https://github.com/sherlock-audit/2022-08-sentiment-judging/tree/main/025-H 
-
 ## Found by 
 Lambda, JohnSmith, WATCHPUG, 0x52, berndartmueller, Bahurum
 
@@ -355,11 +362,14 @@ Manual Review
         );
     }
 ```
+## Sentiment Team
+Fixed as recommended. PR [here](https://github.com/sentimentxyz/oracle/pull/34).
+
+## Lead Senior Watson
+Confirmed fix. 
 
 # Issue H-5: `UniV2LPOracle` will malfunction if token0 or token1's `decimals != 18` 
-
 Source: https://github.com/sherlock-audit/2022-08-sentiment-judging/tree/main/026-H 
-
 ## Found by 
 Lambda, WATCHPUG, 0x52, hyh
 
@@ -526,10 +536,14 @@ Manual Review
 
 Consider normalizing r0 and r1 to 18 decimals before using them in the formula.
 
+## Sentiment Team
+Fixed as recommended. PRs [here](https://github.com/sentimentxyz/oracle/pull/35) and [here](https://github.com/sentimentxyz/oracle/pull/41).
+
+## Lead Senior Watson
+Confirmed fix. 
+
 # Issue H-6: `updateState()` should be called in `depositEth()` and `redeemEth()` 
-
 Source: https://github.com/sherlock-audit/2022-08-sentiment-judging/tree/main/085-H 
-
 ## Found by 
 Lambda, Ruhum, bytehat, WATCHPUG, xiaoming90, pashov, cccz, GimelSec
 
@@ -727,11 +741,14 @@ Manual Review
         msg.sender.safeTransferEth(assets);
     }
 ```
+## Sentiment Team
+Fixed as recommended. PR [here](https://github.com/sentimentxyz/protocol/pull/230).
+
+## Lead Senior Watson
+Confirmed fix. 
 
 # Issue H-7: Tokens received from Curve's `remove_liquidity()` should be added to the assets list even if `_min_amounts` are set to `0` 
-
 Source: https://github.com/sherlock-audit/2022-08-sentiment-judging/tree/main/267-H 
-
 ## Found by 
 WATCHPUG
 
@@ -846,11 +863,65 @@ function canRemoveLiquidity(address target, bytes calldata data)
     return (true, tokensIn, tokensOut);
 }
 ```
+## Sentiment Team
+Fixed as recommended. PR [here](https://github.com/sentimentxyz/controller/pull/39).
+
+## Lead Senior Watson
+Confirmed fix. 
+
+# Issue H-8: `CurveLPStaking` Curve's gauge rewards cannot be claimed 
+Source: https://github.com/sherlock-audit/2022-08-sentiment-judging/tree/main/502-H 
+## Found by 
+WATCHPUG
+
+## Summary
+
+Note: This issue is a part of the extra scope added by Sentiment AFTER the audit contest. This scope was only reviewed by WatchPug and relates to these three PRs:
+
+1. [Lending deposit cap](https://github.com/sentimentxyz/protocol/pull/234)
+2. [Fee accrual modification](https://github.com/sentimentxyz/protocol/pull/233)
+3. [CRV staking](https://github.com/sentimentxyz/controller/pull/41)
+
+Curve's gauge rewards cannot be claimed.
+
+## Vulnerability Detail
+
+The sole goal of `CurveLPStakingController` is to stake and earn rewards from Curve's gauge system.
+
+However, it doesn't support `claim_rewards()`, and both `deposit()` or `withdraw()` are using the default value (`false`) for `_claim_rewards` parameter.
+
+## Impact
+
+Curve's gauge rewards cannot be claimed.
+
+## Code Snippet
+https://github.com/sentimentxyz/controller/blob/be4a7c70ecef788ca9226b46ff108ddd9001b14e/src/curve/CurveLPStakingController.sol#L20-L24
+
+```solidity
+/// @notice deposit(uint256)
+bytes4 constant DEPOSIT = 0xb6b55f25;
+
+/// @notice withdraw(uint256)
+bytes4 constant WITHDRAW = 0x2e1a7d4d;
+```
+
+## Tool used
+
+Manual Review
+
+## Recommendation
+
+Consider supporting claim_rewards(address,address) or using deposit(uint256,address,bool) and withdraw(uint256,address,bool) to support claim rewards when deposit() or withdraw().
+
+## Sentiment Team
+Fixed controller as recommended to claim gauge rewards and moved gauge token oracle into a separate contract instead. PR [here](https://github.com/sentimentxyz/oracle/pull/42).
+
+## Lead Senior Watson
+Confirmed fix. 
+
 
 # Issue M-1: Lack of price freshness check in `ChainlinkOracle.sol#getPrice()` allows a stale price to be used 
-
 Source: https://github.com/sherlock-audit/2022-08-sentiment-judging/tree/main/002-M 
-
 ## Found by 
 defsec, icedpeachtea, oyc\_109, Lambda, 0xNineDec, Avci, ladboy233, JohnSmith, jonatascm, Ruhum, csanuragjain, PwnPatrol, WATCHPUG, 0xNazgul, xiaoming90, 0x52, 0xf15ers, ellahi, pashov, rbserver, GalloDaSballo, Chom, \_\_141345\_\_, cccz, devtooligan, Bahurum, HonorLt, GimelSec, Dravee, Olivierdem
 
@@ -945,10 +1016,14 @@ Consider adding the missing freshness check for stale price:
 
 The `validPeriod` can be based on the `Heartbeat` of the feed.
 
+## Sentiment Team
+Fixed as recommended. PR [here](https://github.com/sentimentxyz/oracle/pull/38).
+
+## Lead Senior Watson
+Confirmed fix. 
+
 # Issue M-2: Can register a non-allowed collateral as collateral 
-
 Source: https://github.com/sherlock-audit/2022-08-sentiment-judging/tree/main/029-M 
-
 ## Found by 
 Lambda, Bahurum, kirk-baird, bin2chen, xiaoming90, GalloDaSballo
 
@@ -1009,10 +1084,19 @@ Check if tokens are allowed as collateral in `_updateTokensIn`  ([AccountManager
 
 This way no asset can be added as collateral without being allowed.
 
+## Sentiment Team
+Fixed as recommended. PR [here](https://github.com/sentimentxyz/controller/pull/40) and [here](https://github.com/sentimentxyz/controller/pull/43).
+
+## Lead Senior Watson
+Confirmed fix. If there are non-whitelisted tokens in the tokensIn list from a controller, it seems like the system should not reject the call, but not to add these tokens (ignore these tokens).
+
+This issue is more obvious for the case of claim rewards from 3rd party protocols, which may include non-whitelisted tokens, but that doesn't mean it should not be allowed to claim these rewards.
+
+## Sentiment Team
+We intend to track rewards as well and hence will be required to add them in the tokensIn list, all rewards will be whitelisted and only those integrations will be enabled. For rewards that we don't want to use as collateral in the system, we plan to add them to the assets and point them to the zero oracle.
+
 # Issue M-3: AccountManager: Liquidations not possible when transfer fails 
-
 Source: https://github.com/sherlock-audit/2022-08-sentiment-judging/tree/main/033-M 
-
 ## Found by 
 panprog, csanuragjain, Czar102, carrot, PwnPatrol, Lambda, kirk-baird, berndartmueller, rbserver, Chom, \_\_141345\_\_
 
@@ -1041,10 +1125,14 @@ Manual Review
 ## Recommendation
 Catch reversions for the transfer and skip this asset (but it could be kept in the assets list to allow retries later on).
 
+## Sentiment Team
+Fixed as recommended. PR [here](https://github.com/sentimentxyz/protocol/pull/231).
+
+## Lead Senior Watson
+Confirmed fix. 
+
 # Issue M-4: Accounts with ETH loans can not be liquidated if LEther's underlying is set to `address(0)` 
-
 Source: https://github.com/sherlock-audit/2022-08-sentiment-judging/tree/main/034-M 
-
 ## Found by 
 Lambda, WATCHPUG, hansfriese, rbserver, HonorLt, 0xc0ffEE
 
@@ -1147,10 +1235,14 @@ Manual Review
 1. Consider removing the misleading logic in `AccountManager#settle()` and `RiskEngine#_valueInWei()` that handles `address(0)` as an asset;
 2. Consider disallowing adding `address(0)` as `underlying` in `setLToken()`.
 
+## Sentiment Team
+Fixed as recommended. PR [here](https://github.com/sentimentxyz/protocol/pull/228).
+
+## Lead Senior Watson
+Confirmed fix. 
+
 # Issue M-5: Balances of rebasing tokens aren't properly tracked 
-
 Source: https://github.com/sherlock-audit/2022-08-sentiment-judging/tree/main/035-M 
-
 ## Found by 
 Lambda, JohnSmith, PwnPatrol, IllIllI, xiaoming90, ellahi, bytehat
 
@@ -1179,10 +1271,14 @@ Manual Review
 ## Recommendation
 Adjust share amounts when the account balance doesn't match the share conversion calculation when taking into account gains made by the borrower
 
+## Sentiment Team
+We'll make sure to not interact with fee-on-transfer tokens. This can be ensured by the admins.
+
+## Lead Senior Watson
+Note: The admins should not add rebasing/fee-on-transfer tokens to any allowed lists.
+
 # Issue M-6: If oracle is set for ERC777 token, re-entrancy is possible to steal all LToken funds 
-
 Source: https://github.com/sherlock-audit/2022-08-sentiment-judging/tree/main/076-M 
-
 ## Found by 
 panprog, xiaoming90, Tutturu, devtooligan, Bahurum, Czar102
 
@@ -1250,10 +1346,14 @@ Manual Review
 1. Add ReEntrancy guard from openzeppelin to main entry functions, mostly all functions in `AccountManager`.
 2. Add correct token checks to uniswap v2 controller.
 
+## Sentiment Team
+We found an additional issue reported by a community member which was not a real exploit but exploited a vulnerability in the logic. Would request the auditors to take a look. PR [here](https://github.com/sentimentxyz/protocol/pull/237).
+
+## Lead Senior Watson
+Fixed. 
+
 # Issue M-7: Uniswap contract added to controller doesn't match with function signatures 
-
 Source: https://github.com/sherlock-audit/2022-08-sentiment-judging/tree/main/092-M 
-
 ## Found by 
 PwnPatrol
 
@@ -1305,10 +1405,14 @@ Use Router 2 (address: 0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45) when calling 
 
 Alternatively, add the extra function signatures in `UniV3Controller.sol` so the controller is able to work on either Router.
 
+## Sentiment Team
+Fixed as recommended. PR [here](https://github.com/sentimentxyz/protocol/pull/229).
+
+## Lead Senior Watson
+Confirmed fix. 
+
 # Issue M-8: Missing revert keyword 
-
 Source: https://github.com/sherlock-audit/2022-08-sentiment-judging/tree/main/097-M 
-
 ## Found by 
 PwnPatrol
 
@@ -1359,10 +1463,14 @@ Add missing `revert` keyword to L70 of Helpers.sol.
 if (!isContract(target)) revert Errors.AddressNotContract;
 ```
 
+## Sentiment Team
+Fixed as recommended. PR [here](https://github.com/sentimentxyz/protocol/pull/227).
+
+## Lead Senior Watson
+Confirmed fix. 
+
 # Issue M-9: Protocol Reserve Within A LToken Vault Can Be Lent Out 
-
 Source: https://github.com/sherlock-audit/2022-08-sentiment-judging/tree/main/122-M 
-
 ## Found by 
 xiaoming90
 
@@ -1470,10 +1578,14 @@ function lendTo(address account, uint amt)
 }
 ```
 
+## Sentiment Team
+We removed reserves completely in this [PR](https://github.com/sentimentxyz/protocol/pull/236).
+
+## Lead Senior Watson
+Confirmed fix. 
+
 # Issue M-10: ERC4626Oracle Vulnerable To Price Manipulation 
-
 Source: https://github.com/sherlock-audit/2022-08-sentiment-judging/tree/main/133-M 
-
 ## Found by 
 xiaoming90, IllIllI
 
@@ -1535,10 +1647,14 @@ The attacker could perform price manipulation to make the apparent value of an a
 
 Avoid using `previewRedeem` function to calculate the price of the LP token of an ERC4626 vault. Consider implementing TWAP so that the price cannot be inflated or deflated within a single block/transaction or within a short period of time.
 
+## Sentiment Team
+Depends on the integration itself, so there's no action that can be taken right now.
+
+## Lead Senior Watson
+Acknowledged. 
+
 # Issue M-11: Delisted assets can still be deposited and borrowed against by accounts that already have them  
-
 Source: https://github.com/sherlock-audit/2022-08-sentiment-judging/tree/main/154-M 
-
 ## Found by 
 0x52, Kumpa, devtooligan, WATCHPUG
 
@@ -1566,10 +1682,14 @@ Manual Review
 
 Calculations for account health should be split into two distinct categories. When calculating the health of a position post-action, unsupported assets should not be considered in the total value of the account. When calculating the health of a position for liquidation, all assets on the asset list should be considered. This prevent any new borrowing against a delisted asset but doesn't risk all affected users being liquidated unfairly.
 
+## Sentiment Team
+Fixed as recommended. PR [here](https://github.com/sentimentxyz/oracle/pull/44).
+
+## Lead Senior Watson
+Confirmed fix. 
+
 # Issue M-12: M-03 YTokenOracle doesn't account for losses when pricing the yToken 
-
 Source: https://github.com/sherlock-audit/2022-08-sentiment-judging/tree/main/204-M 
-
 ## Found by 
 GalloDaSballo
 
@@ -1607,10 +1727,14 @@ Refactor `getPrice(address)` to `getPrice(address, amount)` and pass in the exac
 
 Alternatively cap the Yearn tokens to a massively small LTV (35% is probably as high as you should go without simming on a token by token basis)
 
+## Sentiment Team
+Not fixing since we don't plan to launch with Yearn. We are okay with not including this contract in the coverage scope since it won't be deployed.
+
+## Lead Senior Watson
+Acknowledged. 
+
 # Issue M-13: M-05 Yearn `withdraw(uint)` selector may backfire 
-
 Source: https://github.com/sherlock-audit/2022-08-sentiment-judging/tree/main/208-M 
-
 ## Found by 
 GalloDaSballo
 
@@ -1645,10 +1769,14 @@ Manual Review
 
 Consider adding support for a more complete withdraw that allows to change the `maxLoss` parameter
 
+## Sentiment Team
+Not fixing since we don't plan to launch with Yearn. We are okay with not including this contract in the coverage scope since it won't be deployed.
+
+## Lead Senior Watson
+Acknowledged.
+
 # Issue M-14: `Reserves` should not be considered part of the available liquidity while calculating the interest rate 
-
 Source: https://github.com/sherlock-audit/2022-08-sentiment-judging/tree/main/266-M 
-
 ## Found by 
 WATCHPUG
 
@@ -1772,4 +1900,212 @@ function getRateFactor() internal view returns (uint) {
         );
 }
 ```
+
+## Sentiment Team
+Removed reserves from LToken and added an alternate mechanism to collect direct fees.
+
+## Lead Senior Watson
+originationFee may result in the borrower account becoming liquidatable immediately (aka WP-M2).
+
+## Sentiment Team
+Fixed as recommended. PR [here](https://github.com/sentimentxyz/protocol/pull/236). 
+
+## Lead Senior Watson
+riskEngine.isBorrowAllowed should be removed as it's no longer needed.
+
+## Sentiment Team
+Pushed a commit to remove the redundant call to riskEngine. PR [here](https://github.com/sentimentxyz/protocol/pull/236/commits/bfc445b02784f8130181641ce0054382b4cc3ec5
+). 
+
+# Issue M-15: LToken's implmentation is not fully up to EIP-4626's specification 
+Source: https://github.com/sherlock-audit/2022-08-sentiment-judging/tree/main/500-M 
+## Found by 
+WATCHPUG
+
+## Summary
+
+Note: This issue is a part of the extra scope added by Sentiment AFTER the audit contest. This scope was only reviewed by WatchPug and relates to these three PRs:
+
+1. [Lending deposit cap](https://github.com/sentimentxyz/protocol/pull/234)
+2. [Fee accrual modification](https://github.com/sentimentxyz/protocol/pull/233)
+3. [CRV staking](https://github.com/sentimentxyz/controller/pull/41)
+
+LToken's implmentation is not fully up to EIP-4626's specification. This issue is would actually be considered a Low issue if it were a part of a Sherlock contest. 
+
+## Vulnerability Detail
+
+https://github.com/sentimentxyz/protocol/blob/ccfceb2805cf3595a95198c97b6846c8a0b91506/src/tokens/utils/ERC4626.sol#L185-L187
+
+```solidity
+function maxMint(address) public view virtual returns (uint256) {
+    return type(uint256).max;
+}
+```
+
+MUST return the maximum amount of shares mint would allow to be deposited to receiver and not cause a revert, which MUST NOT be higher than the actual maximum that would be accepted (it should underestimate if necessary). This assumes that the user has infinite assets, i.e. MUST NOT rely on balanceOf of asset.
+
+https://eips.ethereum.org/EIPS/eip-4626#:~:text=MUST%20return%20the%20maximum%20amount%20of%20shares,NOT%20rely%20on%20balanceOf%20of%20asset
+
+maxMint() and maxDeposit() should reflect the limitation of maxSupply.
+
+## Impact
+
+Could cause unexpected behavior in the future due to non-compliance with EIP-4626 standard. 
+
+## Code Snippet
+https://github.com/sentimentxyz/protocol/blob/ccfceb2805cf3595a95198c97b6846c8a0b91506/src/tokens/utils/ERC4626.sol#L185-L187
+
+```solidity
+function maxMint(address) public view virtual returns (uint256) {
+    return type(uint256).max;
+}
+```
+
+## Tool used
+
+Manual Review
+
+## Recommendation
+
+maxMint() and maxDeposit() should reflect the limitation of maxSupply.
+
+Consider changing maxMint() and maxDeposit() to:
+
+```solidity
+function maxMint(address) public view virtual returns (uint256) {
+    if (totalSupply >= maxSupply) {
+        return 0;
+    }
+    return maxSupply - totalSupply;
+}
+```
+
+```solidity
+function maxDeposit(address) public view virtual returns (uint256) {
+    return convertToAssets(maxMint(address(0)));
+}
+```
+
+## Sentiment Team
+Fixed as recommended. PR [here](https://github.com/sentimentxyz/protocol/pull/235).
+
+## Lead Senior Watson
+Confirmed fix. 
+
+# Issue M-16: `originationFee` may result in the borrower account becoming liquidatable immediately 
+Source: https://github.com/sherlock-audit/2022-08-sentiment-judging/tree/main/501-M 
+## Found by 
+WATCHPUG
+
+## Summary
+
+Note: This issue is a part of the extra scope added by Sentiment AFTER the audit contest. This scope was only reviewed by WatchPug and relates to these three PRs:
+
+1. [Lending deposit cap](https://github.com/sentimentxyz/protocol/pull/234)
+2. [Fee accrual modification](https://github.com/sentimentxyz/protocol/pull/233)
+3. [CRV staking](https://github.com/sentimentxyz/controller/pull/41)
+
+`originationFee` may result in the borrower account becoming liquidatable immediately.
+
+## Vulnerability Detail
+
+When checking `riskEngine.isBorrowAllowed()`, the `originationFee` of the borrow is not considered. Thus, when `originationFee` is large enough, the borrower account becomes liquidatable immediately.
+
+For example:
+
+Let's say USDC's `originationFee` is 30%;
+
+Alice has `100 USDC`, and 0 debt in her account;
+Alice borrowed `400 USDC`, received only `280 USDC` after the `originationFee`;
+Alice's account is now liquidatable.
+Actually, in the case above, Alice's account won't even get liquidated as all the assets are worth (380 USDC) less than the total debt (`400 USDC`).
+
+## Impact
+
+`originationFee` may result in the borrower account becoming liquidatable immediately.
+
+## Code Snippet
+https://github.com/sentimentxyz/protocol/blob/f5a9089e87752986af522cc952f95beb037491c8/src/tokens/LToken.sol#L243-L245
+
+```solidity
+function updateOriginationFee(uint _originationFee) external adminOnly {
+    originationFee = _originationFee;
+}
+```
+
+https://github.com/sentimentxyz/protocol/blob/f5a9089e87752986af522cc952f95beb037491c8/src/core/AccountManager.sol#L203-L217
+
+```solidity
+function borrow(address account, address token, uint amt)
+    external
+    whenNotPaused
+    onlyOwner(account)
+{
+    if (registry.LTokenFor(token) == address(0))
+        revert Errors.LTokenUnavailable();
+    if (!riskEngine.isBorrowAllowed(account, token, amt))
+        revert Errors.RiskThresholdBreached();
+    if (IAccount(account).hasAsset(token) == false)
+        IAccount(account).addAsset(token);
+    if (ILToken(registry.LTokenFor(token)).lendTo(account, amt))
+        IAccount(account).addBorrow(token);
+    emit Borrow(account, msg.sender, token, amt);
+}
+```
+
+https://github.com/sentimentxyz/protocol/blob/f5a9089e87752986af522cc952f95beb037491c8/src/core/RiskEngine.sol#L72-L86
+
+```solidity
+function isBorrowAllowed(
+    address account,
+    address token,
+    uint amt
+)
+    external
+    view
+    returns (bool)
+{
+    uint borrowValue = _valueInWei(token, amt);
+    return _isAccountHealthy(
+        _getBalance(account) + borrowValue,
+        _getBorrows(account) + borrowValue
+    );
+}
+```
+
+## Tool used
+
+Manual Review
+
+## Recommendation
+
+Consider asserting riskEngine.isAccountHealthy() after the borrow:
+
+```solidity
+function borrow(address account, address token, uint amt)
+    external
+    whenNotPaused
+    onlyOwner(account)
+{
+    if (registry.LTokenFor(token) == address(0))
+        revert Errors.LTokenUnavailable();
+    if (IAccount(account).hasAsset(token) == false)
+        IAccount(account).addAsset(token);
+    if (ILToken(registry.LTokenFor(token)).lendTo(account, amt))
+        IAccount(account).addBorrow(token);
+    if (!riskEngine.isAccountHealthy(account))
+        revert Errors.RiskThresholdBreached();
+    emit Borrow(account, msg.sender, token, amt);
+}
+```
+
+## Sentiment Team
+Fixed as recommended. PR [here](https://github.com/sentimentxyz/protocol/pull/236).
+
+## Lead Senior Watson
+`riskEngine.isBorrowAllowed` should be removed as it's no longer needed.
+
+## Sentiment Team
+Pushed a commit to remove the redundant call to riskEngine, you can find it [here](https://github.com/sentimentxyz/protocol/pull/236/commits/bfc445b02784f8130181641ce0054382b4cc3ec5).
+
 
